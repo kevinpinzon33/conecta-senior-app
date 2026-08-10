@@ -1,10 +1,17 @@
 const screenEl = document.getElementById("screen");
 const tabbar = document.getElementById("tabbar");
 const alertBadge = document.getElementById("alertBadge");
+const topbar = document.getElementById("topbar");
+
+topbar.innerHTML = `
+  <div class="topbar-brand">
+    <img src="icons/logo-mark.png" alt="" width="26" height="26" />
+    <div class="word"><b>Conecta</b><small>Senior</small></div>
+  </div>
+`;
 
 const ICONS = {
   qr: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3zM21 14v3M14 21h3M18 18h3v3h-3z"/></svg>`,
-  bateria: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="16" height="10" rx="2"/><line x1="22" y1="11" x2="22" y2="13"/></svg>`,
   zona: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 0 1 18 0Z"/><circle cx="12" cy="10" r="3"/></svg>`,
   wristband: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 12 2 2 4-4"/><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z"/></svg>`,
   phone: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.36 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.34 1.85.573 2.81.7A2 2 0 0 1 22 16.92Z"/></svg>`,
@@ -76,12 +83,12 @@ function renderInicio() {
     <div class="map-card">
       <div class="map-canvas">
         <svg class="streets" viewBox="0 0 400 260" preserveAspectRatio="none">
-          <line x1="0" y1="55" x2="400" y2="40" stroke="#C4D6D1" stroke-width="10"/>
-          <line x1="0" y1="160" x2="400" y2="175" stroke="#C4D6D1" stroke-width="14"/>
-          <line x1="90" y1="0" x2="60" y2="260" stroke="#C4D6D1" stroke-width="9"/>
-          <line x1="290" y1="0" x2="320" y2="260" stroke="#C4D6D1" stroke-width="9"/>
-          <circle cx="120" cy="80" r="24" fill="#D3E4DE"/>
-          <circle cx="300" cy="200" r="30" fill="#D3E4DE"/>
+          <line x1="0" y1="55" x2="400" y2="40" stroke="#2E3440" stroke-width="10"/>
+          <line x1="0" y1="160" x2="400" y2="175" stroke="#2E3440" stroke-width="14"/>
+          <line x1="90" y1="0" x2="60" y2="260" stroke="#2E3440" stroke-width="9"/>
+          <line x1="290" y1="0" x2="320" y2="260" stroke="#2E3440" stroke-width="9"/>
+          <circle cx="120" cy="80" r="24" fill="#242A34"/>
+          <circle cx="300" cy="200" r="30" fill="#242A34"/>
         </svg>
         <div class="safe-zone"></div>
         <div class="you-dot"><div class="dot"></div><span>Tú</span></div>
@@ -107,7 +114,6 @@ function renderInicio() {
           </div>
         </div>
         <div class="map-meta">
-          <span>${ICONS.bateria} Pulsera ${s.bateria}%</span>
           <span>Radio zona segura: ${s.zonaSeguraRadioM} m</span>
         </div>
       </div>
@@ -143,7 +149,7 @@ function renderInicio() {
 function renderAlertas() {
   const items = state.alertas
     .map((a) => {
-      const color = a.tipo === "bateria" ? "var(--cuidado)" : a.tipo === "wristband" ? "var(--presente)" : "var(--senal)";
+      const color = a.tipo === "wristband" ? "var(--presente)" : "var(--senal)";
       return `
       <div class="alert-card">
         <div class="icon-badge" style="background:${color}18;color:${color}">${ICONS[a.tipo] || ICONS.warn}</div>
@@ -212,7 +218,7 @@ function renderPerfil() {
       <div class="avatar-lg">${s.nombre.charAt(0)}</div>
       <div>
         <h1>${s.nombre}</h1>
-        <p>${s.edad} años · Pulsera #${s.pulseraId}</p>
+        <p>${s.edad} años · Pulsera de caucho #${s.pulseraId}</p>
       </div>
     </div>
 

@@ -4,8 +4,8 @@
   "description": "Localiza en vivo y recibe alertas de tu adulto mayor",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#163A3F",
-  "theme_color": "#163A3F",
+  "background_color": "#181B21",
+  "theme_color": "#181B21",
   "orientation": "portrait",
   "icons": [
     { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },

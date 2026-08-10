@@ -57,8 +57,8 @@ Tu iPhone y tu computadora deben estar **conectados a la misma red WiFi**.
 
 ## 3. Qué puedes probar
 
-- **Inicio**: ubicación simulada de Rosa Elena, estado, batería de
-  pulsera, botón "Llamar" (marca al contacto principal) y "Marcar visto".
+- **Inicio**: ubicación simulada de Rosa Elena, estado, radio de zona
+  segura, botón "Llamar" (marca al contacto principal) y "Marcar visto".
 - **Alertas**: botón **"Simular escaneo"** — crea una alerta real,
   nueva, con hora actual, guardada en `db.json`. Puedes marcarla como
   atendida y el estado del adulto mayor vuelve a "presente".

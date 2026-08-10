@@ -4,7 +4,6 @@
     "nombre": "Rosa Elena Vidal",
     "edad": 78,
     "pulseraId": "CS-00412",
-    "bateria": 82,
     "tipoSangre": "O positivo",
     "condiciones": "Hipertension, diabetes tipo 2",
     "alergias": "Penicilina",
@@ -40,16 +39,6 @@
       "detalle": "Rosa Elena salio del perimetro configurado",
       "lugar": "Calle Orizaba y Alvaro Obregon",
       "creadoEn": "2026-08-02T11:03:00.000Z",
-      "estado": "atendida",
-      "whatsappEnviado": true
-    },
-    {
-      "id": 2,
-      "tipo": "bateria",
-      "titulo": "Bateria de pulsera baja",
-      "detalle": "La pulsera llego al 15% de bateria",
-      "lugar": "Notificacion automatica",
-      "creadoEn": "2026-08-02T20:47:00.000Z",
       "estado": "atendida",
       "whatsappEnviado": true
     },

@@ -1,18 +1,19 @@
 :root {
-  --bg: #F3F6F5;
-  --panel: #FFFFFF;
-  --panel-alt: #E7EEEC;
-  --noche: #163A3F;
-  --noche-700: #1F4A50;
-  --texto: #16232A;
-  --texto-muted: #5C6D6C;
+  /* Paleta de marca (tomada de conectasenior.com.co) */
+  --bg: #181B21;
+  --panel: #252931;
+  --panel-alt: #1E2229;
+  --noche: #C9A535;
+  --noche-700: #E8C96D;
+  --texto: #F0EAD6;
+  --texto-muted: #9A9080;
   --senal: #E8622C;
   --cuidado: #E8A33D;
-  --presente: #3F8F6B;
-  --linea: #D9E2DF;
+  --presente: #2E9E5E;
+  --linea: rgba(201, 165, 53, 0.18);
 
-  --font-display: Georgia, 'Times New Roman', serif;
-  --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-display: 'Cormorant Garamond', Georgia, 'Times New Roman', serif;
+  --font-body: 'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-mono: ui-monospace, Menlo, 'SF Mono', monospace;
 }
 
@@ -21,7 +22,7 @@
 html, body {
   margin: 0;
   padding: 0;
-  background: var(--noche);
+  background: var(--bg);
   font-family: var(--font-body);
   color: var(--texto);
   overscroll-behavior: none;
@@ -44,6 +45,32 @@ html, body {
   background: var(--bg);
   flex-shrink: 0;
 }
+.topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px 0;
+}
+.topbar-brand img { height: 26px; width: auto; }
+.topbar-brand .word {
+  display: flex;
+  flex-direction: column;
+  line-height: 1;
+}
+.topbar-brand .word b {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--noche);
+}
+.topbar-brand .word small {
+  font-family: var(--font-display);
+  font-size: 9.5px;
+  font-weight: 400;
+  letter-spacing: 0.22em;
+  color: var(--texto-muted);
+}
 
 #screen {
   flex: 1;
@@ -59,7 +86,7 @@ html, body {
   justify-content: space-around;
   align-items: center;
   padding: 8px 8px calc(10px + env(safe-area-inset-bottom));
-  background: rgba(255,255,255,0.94);
+  background: rgba(24,27,33,0.92);
   border-top: 1px solid var(--linea);
   backdrop-filter: blur(10px);
 }
@@ -71,7 +98,7 @@ html, body {
   gap: 3px;
   background: none;
   border: none;
-  color: #9AA8A6;
+  color: var(--texto-muted);
   font-family: var(--font-body);
   font-size: 10.5px;
   font-weight: 500;
@@ -113,7 +140,7 @@ html, body {
 .map-canvas {
   position: relative;
   height: 260px;
-  background: linear-gradient(180deg, #DCEAE6 0%, #E9F1EE 60%, #F0F5F3 100%);
+  background: linear-gradient(180deg, #1F2530 0%, #1B2029 60%, #181B21 100%);
   overflow: hidden;
 }
 .map-canvas svg.streets { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0.6; }
@@ -123,8 +150,8 @@ html, body {
   left: 50%; top: 48%;
   transform: translate(-50%,-50%);
   border-radius: 50%;
-  border: 2px dashed rgba(31,74,80,0.35);
-  background: rgba(63,143,107,0.05);
+  border: 2px dashed rgba(46,158,94,0.4);
+  background: rgba(46,158,94,0.06);
 }
 .you-dot {
   position: absolute; left: 60px; top: 210px; transform: translate(-50%,-50%);
@@ -132,14 +159,14 @@ html, body {
 }
 .you-dot .dot {
   width: 24px; height: 24px; border-radius: 50%;
-  background: var(--noche); border: 3px solid white;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+  background: var(--noche); border: 3px solid var(--bg);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.35);
   display: flex; align-items: center; justify-content: center;
 }
-.you-dot .dot::after { content:''; width:6px; height:6px; border-radius:50%; background:white; }
+.you-dot .dot::after { content:''; width:6px; height:6px; border-radius:50%; background:var(--bg); }
 .you-dot span {
   margin-top: 4px; font-size: 10px; font-weight: 600;
-  background: rgba(255,255,255,0.9); padding: 1px 6px; border-radius: 999px;
+  background: rgba(37,41,49,0.92); padding: 1px 6px; border-radius: 999px;
   color: var(--noche);
 }
 
@@ -167,14 +194,14 @@ html, body {
   width: 52px; height: 52px; border-radius: 50%;
   background: var(--noche); border: 3px solid var(--presente);
   display: flex; align-items: center; justify-content: center;
-  color: white; font-family: var(--font-display); font-size: 18px;
+  color: var(--bg); font-family: var(--font-display); font-size: 18px;
 }
 .presence.alerta .presence-avatar { border-color: var(--senal); }
 .presence.cuidado .presence-avatar { border-color: var(--cuidado); }
 .presence-pin {
   position: absolute; right: -2px; bottom: -2px;
   width: 20px; height: 20px; border-radius: 50%;
-  background: var(--presente); border: 2px solid white;
+  background: var(--presente); border: 2px solid var(--bg);
   display: flex; align-items: center; justify-content: center;
 }
 .presence.alerta .presence-pin { background: var(--senal); }
@@ -189,7 +216,7 @@ html, body {
   font-size: 11px; font-weight: 600;
   padding: 4px 10px; border-radius: 999px;
 }
-.pill.presente { background: rgba(63,143,107,0.1); color: var(--presente); }
+.pill.presente { background: rgba(46,158,94,0.12); color: var(--presente); }
 .pill.alerta { background: rgba(232,98,44,0.1); color: var(--senal); }
 .pill.cuidado { background: rgba(232,163,61,0.1); color: var(--cuidado); }
 
@@ -221,7 +248,7 @@ html, body {
   font-family: var(--font-body); font-size: 14px; font-weight: 600;
   cursor: pointer;
 }
-.btn-primary { background: var(--noche); color: white; }
+.btn-primary { background: var(--noche); color: var(--bg); }
 .btn-secondary { background: var(--panel-alt); color: var(--noche); }
 .btn:active { transform: scale(0.98); }
 
@@ -261,7 +288,7 @@ html, body {
   text-transform: uppercase; letter-spacing: 0.02em;
 }
 .alert-status.pendiente { background: rgba(232,98,44,0.12); color: var(--senal); }
-.alert-status.atendida { background: rgba(63,143,107,0.12); color: var(--presente); }
+.alert-status.atendida { background: rgba(46,158,94,0.12); color: var(--presente); }
 .alert-actions { margin-top: 10px; }
 .alert-actions button {
   font-size: 12px; font-weight: 600; color: var(--noche);
@@ -275,7 +302,7 @@ html, body {
   border-radius: 16px;
   padding: 12px 14px;
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  background: rgba(255,255,255,0.5);
+  background: rgba(37,41,49,0.5);
 }
 .simulate-bar p { margin: 0; font-size: 12px; color: var(--texto-muted); line-height: 1.4; }
 .simulate-bar button {
@@ -290,20 +317,21 @@ html, body {
 }
 .avatar-lg {
   width: 64px; height: 64px; border-radius: 50%; background: var(--noche);
-  display: flex; align-items: center; justify-content: center; color: white;
+  display: flex; align-items: center; justify-content: center; color: var(--bg);
   font-family: var(--font-display); font-size: 24px; flex-shrink: 0;
 }
-.profile-head h1 { font-family: var(--font-display); font-size: 21px; font-weight: 600; margin: 0; }
+.profile-head h1 { font-family: var(--font-display); font-size: 21px; font-weight: 600; margin: 0; color: var(--texto); }
 .profile-head p { font-size: 13px; color: var(--texto-muted); margin: 3px 0 0; }
 
 .qr-card {
   margin: 12px 20px 0;
-  background: var(--noche); border-radius: 16px; padding: 14px 16px;
-  display: flex; align-items: center; justify-content: space-between; color: white;
+  background: var(--panel); border: 1px solid var(--linea); border-radius: 16px; padding: 14px 16px;
+  display: flex; align-items: center; justify-content: space-between; color: var(--texto);
 }
 .qr-card .left { display: flex; align-items: center; gap: 10px; }
+.qr-card .left svg { color: var(--noche); }
 .qr-card .title { font-size: 13.5px; font-weight: 500; margin: 0; }
-.qr-card .sub { font-size: 11.5px; color: rgba(255,255,255,0.7); margin: 1px 0 0; }
+.qr-card .sub { font-size: 11.5px; color: var(--texto-muted); margin: 1px 0 0; }
 
 .medinfo-row, .contact-row { border-radius: 0; border-left: none; border-right: none; border-top: none; }
 .medinfo-list, .contact-list { border: 1px solid var(--linea); border-radius: 16px; overflow: hidden; background: var(--panel); }
