@@ -1,0 +1,68 @@
+{
+  "senior": {
+    "id": 1,
+    "nombre": "Rosa Elena Vidal",
+    "edad": 78,
+    "pulseraId": "CS-00412",
+    "bateria": 82,
+    "tipoSangre": "O positivo",
+    "condiciones": "Hipertension, diabetes tipo 2",
+    "alergias": "Penicilina",
+    "status": "presente",
+    "ubicacion": {
+      "direccion": "Av. Reforma 214, Col. Roma Norte",
+      "lat": 19.4180,
+      "lng": -99.1620,
+      "actualizadoEn": "2026-08-03T15:12:00.000Z"
+    },
+    "zonaSeguraRadioM": 300
+  },
+  "contactos": [
+    { "id": 1, "nombre": "Daniela Vidal", "rol": "Hija - Contacto principal", "telefono": "+52 55 1234 5678" },
+    { "id": 2, "nombre": "Marco Vidal", "rol": "Hijo", "telefono": "+52 55 8765 4321" },
+    { "id": 3, "nombre": "Elena Torres", "rol": "Cuidadora", "telefono": "+52 55 2222 3333" }
+  ],
+  "alertas": [
+    {
+      "id": 4,
+      "tipo": "wristband",
+      "titulo": "Pulsera conectada",
+      "detalle": "La pulsera se sincronizo correctamente",
+      "lugar": "Notificacion automatica",
+      "creadoEn": "2026-07-28T13:15:00.000Z",
+      "estado": "atendida",
+      "whatsappEnviado": true
+    },
+    {
+      "id": 3,
+      "tipo": "zona",
+      "titulo": "Salio de la zona segura",
+      "detalle": "Rosa Elena salio del perimetro configurado",
+      "lugar": "Calle Orizaba y Alvaro Obregon",
+      "creadoEn": "2026-08-02T11:03:00.000Z",
+      "estado": "atendida",
+      "whatsappEnviado": true
+    },
+    {
+      "id": 2,
+      "tipo": "bateria",
+      "titulo": "Bateria de pulsera baja",
+      "detalle": "La pulsera llego al 15% de bateria",
+      "lugar": "Notificacion automatica",
+      "creadoEn": "2026-08-02T20:47:00.000Z",
+      "estado": "atendida",
+      "whatsappEnviado": true
+    },
+    {
+      "id": 1,
+      "tipo": "qr",
+      "titulo": "Pulsera escaneada",
+      "detalle": "Un desconocido escaneo el codigo QR de Rosa Elena",
+      "lugar": "Farmacia San Pablo, Roma Norte",
+      "creadoEn": "2026-08-03T15:12:00.000Z",
+      "estado": "atendida",
+      "whatsappEnviado": true
+    }
+  ],
+  "nextAlertId": 5
+}

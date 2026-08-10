@@ -1,0 +1,262 @@
+const screenEl = document.getElementById("screen");
+const tabbar = document.getElementById("tabbar");
+const alertBadge = document.getElementById("alertBadge");
+
+const ICONS = {
+  qr: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3zM21 14v3M14 21h3M18 18h3v3h-3z"/></svg>`,
+  bateria: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="16" height="10" rx="2"/><line x1="22" y1="11" x2="22" y2="13"/></svg>`,
+  zona: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 0 1 18 0Z"/><circle cx="12" cy="10" r="3"/></svg>`,
+  wristband: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 12 2 2 4-4"/><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z"/></svg>`,
+  phone: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.36 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.34 1.85.573 2.81.7A2 2 0 0 1 22 16.92Z"/></svg>`,
+  pill: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z"/><path d="m8.5 8.5 7 7"/></svg>`,
+  drop: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2.69s-7 7.44-7 11.31a7 7 0 0 0 14 0c0-3.87-7-11.31-7-11.31Z"/></svg>`,
+  warn: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
+  clock: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
+  pin: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 0 1 18 0Z"/><circle cx="12" cy="10" r="3"/></svg>`,
+  check: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`,
+};
+
+let state = { senior: null, alertas: [], contactos: [], tab: "inicio" };
+
+async function api(path, opts) {
+  const res = await fetch("/api" + path, {
+    headers: { "Content-Type": "application/json" },
+    ...opts,
+  });
+  if (!res.ok) throw new Error("Error de red: " + path);
+  return res.json();
+}
+
+function timeAgo(iso) {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return "justo ahora";
+  if (mins < 60) return `hace ${mins} min`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `hace ${hrs} h`;
+  return `hace ${Math.floor(hrs / 24)} d`;
+}
+
+function fmtDateTime(iso) {
+  const d = new Date(iso);
+  return d.toLocaleString("es-MX", { weekday: "short", hour: "2-digit", minute: "2-digit" });
+}
+
+async function refreshAll() {
+  const [senior, alertas, contactos] = await Promise.all([
+    api("/senior"),
+    api("/alertas"),
+    api("/contactos"),
+  ]);
+  state.senior = senior;
+  state.alertas = alertas;
+  state.contactos = contactos;
+  render();
+}
+
+function render() {
+  const pendientes = state.alertas.filter((a) => a.estado === "pendiente").length;
+  alertBadge.hidden = pendientes === 0;
+
+  if (state.tab === "inicio") renderInicio();
+  else if (state.tab === "alertas") renderAlertas();
+  else renderPerfil();
+}
+
+function renderInicio() {
+  const s = state.senior;
+  if (!s) { screenEl.innerHTML = '<div class="loading">Cargando…</div>'; return; }
+
+  screenEl.innerHTML = `
+    <div class="hero">
+      <p class="hero-greeting">Hola, Daniela</p>
+      <h1 class="hero-title">${s.nombre.split(" ")[0]} está ${s.status === "alerta" ? "en alerta" : "bien"}</h1>
+    </div>
+
+    <div class="map-card">
+      <div class="map-canvas">
+        <svg class="streets" viewBox="0 0 400 260" preserveAspectRatio="none">
+          <line x1="0" y1="55" x2="400" y2="40" stroke="#C4D6D1" stroke-width="10"/>
+          <line x1="0" y1="160" x2="400" y2="175" stroke="#C4D6D1" stroke-width="14"/>
+          <line x1="90" y1="0" x2="60" y2="260" stroke="#C4D6D1" stroke-width="9"/>
+          <line x1="290" y1="0" x2="320" y2="260" stroke="#C4D6D1" stroke-width="9"/>
+          <circle cx="120" cy="80" r="24" fill="#D3E4DE"/>
+          <circle cx="300" cy="200" r="30" fill="#D3E4DE"/>
+        </svg>
+        <div class="safe-zone"></div>
+        <div class="you-dot"><div class="dot"></div><span>Tú</span></div>
+        <div class="presence ${s.status}">
+          <div class="ring-pulse"></div>
+          <div class="ring-pulse delay"></div>
+          <div class="presence-avatar">${s.nombre.charAt(0)}</div>
+          <div class="presence-pin">${ICONS.pin}</div>
+        </div>
+      </div>
+      <div class="map-info">
+        <div class="map-info-row">
+          <span class="pill ${s.status}">${ICONS.check} ${
+            s.status === "alerta" ? "Alerta activa" : "Dentro de la zona segura"
+          }</span>
+          <span class="time">${ICONS.clock} ${timeAgo(s.ubicacion.actualizadoEn)}</span>
+        </div>
+        <div class="address-block">
+          ${ICONS.pin}
+          <div>
+            <p>${s.ubicacion.direccion}</p>
+            <p class="coords">${s.ubicacion.lat.toFixed(4)}° N, ${Math.abs(s.ubicacion.lng).toFixed(4)}° O</p>
+          </div>
+        </div>
+        <div class="map-meta">
+          <span>${ICONS.bateria} Pulsera ${s.bateria}%</span>
+          <span>Radio zona segura: ${s.zonaSeguraRadioM} m</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="quick-actions">
+      <button class="btn btn-primary" id="btnLlamar">${ICONS.phone} Llamar</button>
+      <button class="btn btn-secondary" id="btnVisto">${ICONS.check} Marcar visto</button>
+    </div>
+
+    <div class="section">
+      <p class="section-title">Recordatorio</p>
+      <div class="reminder-card">
+        <div class="icon-badge" style="color:var(--cuidado)">${ICONS.pill}</div>
+        <div>
+          <p class="title">Medicamento de la tarde</p>
+          <p class="sub">Losartán 50mg · 6:00 pm</p>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById("btnVisto").onclick = async () => {
+    await api("/senior/marcar-visto", { method: "POST" });
+    refreshAll();
+  };
+  document.getElementById("btnLlamar").onclick = () => {
+    const principal = state.contactos.find((c) => c.rol.includes("principal")) || state.contactos[0];
+    window.location.href = `tel:${(principal?.telefono || "").replace(/\s/g, "")}`;
+  };
+}
+
+function renderAlertas() {
+  const items = state.alertas
+    .map((a) => {
+      const color = a.tipo === "bateria" ? "var(--cuidado)" : a.tipo === "wristband" ? "var(--presente)" : "var(--senal)";
+      return `
+      <div class="alert-card">
+        <div class="icon-badge" style="background:${color}18;color:${color}">${ICONS[a.tipo] || ICONS.warn}</div>
+        <div class="alert-body">
+          <div class="alert-top">
+            <p class="title">${a.titulo}</p>
+            <span class="time">${fmtDateTime(a.creadoEn)}</span>
+          </div>
+          <p class="alert-detail">${a.detalle}</p>
+          <div class="alert-place">${ICONS.pin} ${a.lugar}</div>
+          <span class="alert-status ${a.estado}">${a.estado}</span>
+          ${a.estado === "pendiente" ? `<div class="alert-actions"><button data-id="${a.id}">Marcar como atendida</button></div>` : ""}
+        </div>
+      </div>`;
+    })
+    .join("");
+
+  screenEl.innerHTML = `
+    <div class="hero">
+      <h1 class="hero-title" style="font-size:24px">Alertas</h1>
+      <p class="hero-greeting" style="margin-top:4px">Cada alerta se envía también por WhatsApp</p>
+    </div>
+
+    <div class="simulate-bar">
+      <p>Para probar el flujo sin la pulsera física: simula que alguien escaneó el código QR.</p>
+      <button id="btnSimular">Simular escaneo</button>
+    </div>
+
+    <div class="section" style="padding-top:0">
+      ${items || '<p class="loading">Sin alertas todavía</p>'}
+    </div>
+  `;
+
+  document.getElementById("btnSimular").onclick = async () => {
+    await api("/alertas/simular-scan", { method: "POST" });
+    refreshAll();
+  };
+
+  screenEl.querySelectorAll(".alert-actions button").forEach((btn) => {
+    btn.onclick = async () => {
+      await api(`/alertas/${btn.dataset.id}/marcar-atendida`, { method: "POST" });
+      refreshAll();
+    };
+  });
+}
+
+function renderPerfil() {
+  const s = state.senior;
+  if (!s) { screenEl.innerHTML = '<div class="loading">Cargando…</div>'; return; }
+
+  const contactosHtml = state.contactos
+    .map(
+      (c) => `
+      <div class="contact-row">
+        <div class="left">
+          <div class="contact-avatar"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--noche)" stroke-width="2"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="7" r="4"/></svg></div>
+          <div><p class="title">${c.nombre}</p><p class="sub">${c.rol}</p></div>
+        </div>
+        <a href="tel:${c.telefono.replace(/\s/g, "")}" style="color:var(--noche);display:flex">${ICONS.phone}</a>
+      </div>`
+    )
+    .join("");
+
+  screenEl.innerHTML = `
+    <div class="profile-head">
+      <div class="avatar-lg">${s.nombre.charAt(0)}</div>
+      <div>
+        <h1>${s.nombre}</h1>
+        <p>${s.edad} años · Pulsera #${s.pulseraId}</p>
+      </div>
+    </div>
+
+    <div class="qr-card">
+      <div class="left">
+        ${ICONS.qr}
+        <div>
+          <p class="title">Código QR de emergencia</p>
+          <p class="sub">Impreso en su pulsera</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <p class="section-title">Información médica</p>
+      <div class="medinfo-list">
+        <div class="medinfo-row"><div class="icon-badge" style="color:var(--senal)">${ICONS.drop}</div><div><p class="title">Tipo de sangre</p><p class="sub">${s.tipoSangre}</p></div></div>
+        <div class="medinfo-row"><div class="icon-badge" style="color:var(--cuidado)">${ICONS.pill}</div><div><p class="title">Condiciones</p><p class="sub">${s.condiciones}</p></div></div>
+        <div class="medinfo-row"><div class="icon-badge" style="color:var(--senal)">${ICONS.warn}</div><div><p class="title">Alergias</p><p class="sub">${s.alergias}</p></div></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <p class="section-title">Contactos de emergencia</p>
+      <div class="contact-list">${contactosHtml}</div>
+    </div>
+  `;
+}
+
+tabbar.querySelectorAll(".tab").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    tabbar.querySelectorAll(".tab").forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    state.tab = btn.dataset.tab;
+    render();
+  });
+});
+
+// Registrar service worker para que funcione como PWA instalable
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  });
+}
+
+refreshAll();
+setInterval(refreshAll, 15000);
