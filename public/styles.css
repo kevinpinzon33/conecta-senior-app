@@ -260,15 +260,123 @@ html, body {
   color: var(--texto-muted); margin: 0 0 8px;
 }
 
-.reminder-card, .contact-row, .medinfo-row {
+.contact-row, .medinfo-row {
   background: var(--panel); border: 1px solid var(--linea); border-radius: 16px;
   padding: 14px; display: flex; align-items: center; gap: 12px;
 }
-.reminder-card .icon-badge { background: rgba(232,163,61,0.1); }
 .icon-badge { border-radius: 50%; padding: 8px; flex-shrink: 0; display:flex; }
+
+/* --- Recordatorios --- */
+.section-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 8px;
+}
+.section-head .section-title { margin: 0; }
+.add-btn {
+  display: flex; align-items: center; gap: 5px;
+  background: var(--panel-alt); border: 1px solid var(--linea);
+  color: var(--noche); font-family: var(--font-body);
+  font-size: 12.5px; font-weight: 700;
+  padding: 7px 13px; border-radius: 999px; cursor: pointer;
+}
+.add-btn:active { transform: scale(0.97); }
+
+.reminder-list {
+  border: 1px solid var(--linea); border-radius: 16px;
+  overflow: hidden; background: var(--panel);
+}
+.reminder-card {
+  display: flex; align-items: center;
+  border-bottom: 1px solid var(--linea);
+}
+.reminder-card:last-child { border-bottom: none; }
+/* Boton grande: casi toda la fila alterna hecho/pendiente. */
+.rec-main {
+  flex: 1; min-width: 0;
+  display: flex; align-items: center; gap: 12px;
+  background: none; border: none; cursor: pointer;
+  padding: 14px; text-align: left;
+  font-family: var(--font-body); color: inherit;
+}
+.rec-main:active { background: var(--panel-alt); }
+.rec-body { min-width: 0; }
 .reminder-card p { margin: 0; }
-.reminder-card .title { font-size: 13.5px; font-weight: 600; }
+.reminder-card .title { font-size: 13.5px; font-weight: 600; color: var(--texto); }
 .reminder-card .sub { font-size: 12px; color: var(--texto-muted); margin-top: 2px; }
+.reminder-card.hecho .title {
+  text-decoration: line-through; color: var(--texto-muted); font-weight: 500;
+}
+.reminder-card.hecho .rec-main { opacity: 0.6; }
+.rec-del {
+  flex-shrink: 0; background: none; border: none; cursor: pointer;
+  color: var(--texto-muted); padding: 14px 16px 14px 6px; display: flex;
+}
+.rec-del:active { color: var(--senal); }
+
+.empty-hint {
+  margin: 0; padding: 18px 16px; text-align: center;
+  font-size: 12.5px; line-height: 1.5; color: var(--texto-muted);
+  background: rgba(37,41,49,0.5);
+  border: 1px dashed var(--linea); border-radius: 16px;
+}
+
+/* --- Modal (nuevo recordatorio) --- */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 50;
+  background: rgba(10,12,15,0.72);
+  backdrop-filter: blur(3px);
+  display: flex; align-items: flex-end; justify-content: center;
+  padding: 16px;
+  padding-bottom: calc(16px + env(safe-area-inset-bottom));
+}
+.modal {
+  width: 100%; max-width: 448px;
+  background: var(--panel); border: 1px solid var(--linea);
+  border-radius: 22px; padding: 20px;
+  max-height: 88vh; overflow-y: auto;
+  animation: modalSubir 0.22s ease-out;
+}
+@keyframes modalSubir {
+  from { transform: translateY(16px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.modal h2 {
+  font-family: var(--font-display); font-size: 22px; font-weight: 600;
+  margin: 0 0 16px; color: var(--texto);
+}
+.modal label {
+  display: block; font-size: 12.5px; font-weight: 600;
+  color: var(--texto-muted); margin-bottom: 6px;
+}
+.modal label span { font-weight: 400; opacity: 0.75; }
+.modal input {
+  width: 100%; margin-bottom: 14px;
+  background: var(--panel-alt); border: 1px solid var(--linea);
+  border-radius: 12px; padding: 12px 13px;
+  font-family: var(--font-body); font-size: 15px; color: var(--texto);
+}
+.modal input::placeholder { color: var(--texto-muted); opacity: 0.7; }
+.modal input:focus { outline: none; border-color: var(--noche); }
+
+.tipo-picker { display: flex; gap: 8px; margin-bottom: 16px; }
+.tipo-picker button {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 5px;
+  background: var(--panel-alt); border: 1px solid var(--linea);
+  border-radius: 12px; padding: 11px 6px; cursor: pointer;
+  font-family: var(--font-body); font-size: 11.5px; font-weight: 600;
+  color: var(--texto-muted);
+}
+.tipo-picker button.activo {
+  border-color: var(--noche); color: var(--noche);
+  background: rgba(201,165,53,0.1);
+}
+
+.modal-error {
+  margin: 0 0 12px; font-size: 12.5px; color: var(--senal);
+  background: rgba(232,98,44,0.1); border-radius: 10px; padding: 9px 12px;
+}
+.modal-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.modal-actions .btn:disabled { opacity: 0.6; cursor: default; }
 
 /* --- Alertas --- */
 .alert-card {

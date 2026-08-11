@@ -87,6 +87,82 @@ app.post("/api/senior/marcar-visto", (req, res) => {
   res.json(db.senior);
 });
 
+// --- Recordatorios -------------------------------------------------------
+// Medicamentos, citas y rutinas del adulto mayor. A diferencia de las
+// alertas (que las dispara el sistema), estos los crea el cuidador a mano
+// desde la pantalla de Inicio.
+
+const TIPOS_RECORDATORIO = ["medicamento", "cita", "otro"];
+
+// Ordena por hora del dia; los ya marcados como hechos se van al final.
+function ordenarRecordatorios(lista) {
+  return [...lista].sort((a, b) => {
+    if (a.hecho !== b.hecho) return a.hecho ? 1 : -1;
+    return (a.hora || "").localeCompare(b.hora || "");
+  });
+}
+
+app.get("/api/recordatorios", (req, res) => {
+  const db = loadDb();
+  res.json(ordenarRecordatorios(db.recordatorios || []));
+});
+
+app.post("/api/recordatorios", (req, res) => {
+  const { titulo, detalle, hora, tipo } = req.body || {};
+
+  if (!titulo || !String(titulo).trim()) {
+    return res.status(400).json({ error: "El titulo es obligatorio" });
+  }
+  // La hora es opcional, pero si viene tiene que ser HH:MM (24h).
+  if (hora && !/^([01]\d|2[0-3]):[0-5]\d$/.test(hora)) {
+    return res.status(400).json({ error: "La hora debe tener formato HH:MM" });
+  }
+
+  const db = loadDb();
+  if (!db.recordatorios) db.recordatorios = [];
+  if (!db.nextRecordatorioId) db.nextRecordatorioId = 1;
+
+  const nuevo = {
+    id: db.nextRecordatorioId,
+    tipo: TIPOS_RECORDATORIO.includes(tipo) ? tipo : "otro",
+    titulo: String(titulo).trim(),
+    detalle: detalle ? String(detalle).trim() : "",
+    hora: hora || "",
+    hecho: false,
+    creadoEn: new Date().toISOString(),
+  };
+
+  db.recordatorios.push(nuevo);
+  db.nextRecordatorioId += 1;
+  saveDb(db);
+  res.status(201).json(nuevo);
+});
+
+// Alterna entre hecho y pendiente, para que se pueda deshacer un toque
+// accidental sin tener que borrar el recordatorio.
+app.post("/api/recordatorios/:id/alternar-hecho", (req, res) => {
+  const db = loadDb();
+  const rec = (db.recordatorios || []).find(
+    (r) => r.id === Number(req.params.id)
+  );
+  if (!rec) return res.status(404).json({ error: "Recordatorio no encontrado" });
+  rec.hecho = !rec.hecho;
+  saveDb(db);
+  res.json(rec);
+});
+
+app.delete("/api/recordatorios/:id", (req, res) => {
+  const db = loadDb();
+  const id = Number(req.params.id);
+  const antes = (db.recordatorios || []).length;
+  db.recordatorios = (db.recordatorios || []).filter((r) => r.id !== id);
+  if (db.recordatorios.length === antes) {
+    return res.status(404).json({ error: "Recordatorio no encontrado" });
+  }
+  saveDb(db);
+  res.json({ ok: true });
+});
+
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`\nConecta Senior corriendo en:`);
   console.log(`  http://localhost:${PORT}`);

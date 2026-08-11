@@ -53,5 +53,26 @@
       "whatsappEnviado": true
     }
   ],
-  "nextAlertId": 5
+  "nextAlertId": 5,
+  "recordatorios": [
+    {
+      "id": 1,
+      "tipo": "medicamento",
+      "titulo": "Medicamento de la tarde",
+      "detalle": "Losartan 50mg",
+      "hora": "18:00",
+      "hecho": false,
+      "creadoEn": "2026-08-03T12:00:00.000Z"
+    },
+    {
+      "id": 2,
+      "tipo": "cita",
+      "titulo": "Cita con el cardiologo",
+      "detalle": "Clinica Roma, consultorio 304",
+      "hora": "10:00",
+      "hecho": false,
+      "creadoEn": "2026-08-04T12:00:00.000Z"
+    }
+  ],
+  "nextRecordatorioId": 3
 }

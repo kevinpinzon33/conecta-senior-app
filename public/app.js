@@ -21,17 +21,63 @@ const ICONS = {
   clock: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
   pin: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 0 1 18 0Z"/><circle cx="12" cy="10" r="3"/></svg>`,
   check: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`,
+  cita: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`,
+  otro: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
+  mas: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
+  basura: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`,
 };
 
-let state = { senior: null, alertas: [], contactos: [], tab: "inicio" };
+// Cada tipo de recordatorio tiene su icono y su color.
+const TIPOS_RECORDATORIO = {
+  medicamento: { icono: "pill", color: "var(--cuidado)", etiqueta: "Medicamento" },
+  cita: { icono: "cita", color: "var(--noche)", etiqueta: "Cita" },
+  otro: { icono: "otro", color: "var(--presente)", etiqueta: "Otro" },
+};
+
+let state = {
+  senior: null,
+  alertas: [],
+  contactos: [],
+  recordatorios: [],
+  tab: "inicio",
+};
 
 async function api(path, opts) {
   const res = await fetch("/api" + path, {
     headers: { "Content-Type": "application/json" },
     ...opts,
   });
-  if (!res.ok) throw new Error("Error de red: " + path);
+  if (!res.ok) {
+    // El servidor manda { error: "..." } cuando rechaza algo (por ejemplo
+    // un recordatorio sin titulo); lo usamos como mensaje si viene.
+    let msg = "Error de red: " + path;
+    try {
+      const cuerpo = await res.json();
+      if (cuerpo && cuerpo.error) msg = cuerpo.error;
+    } catch (_) {}
+    throw new Error(msg);
+  }
   return res.json();
+}
+
+// Los recordatorios los escribe el usuario, asi que su texto nunca se
+// inserta crudo en el HTML.
+function esc(texto) {
+  return String(texto ?? "").replace(
+    /[&<>"']/g,
+    (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]
+  );
+}
+
+// "18:00" -> "6:00 pm"
+function fmtHora(hora) {
+  if (!hora) return "";
+  const [h, m] = hora.split(":").map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return "";
+  const sufijo = h < 12 ? "am" : "pm";
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${String(m).padStart(2, "0")} ${sufijo}`;
 }
 
 function timeAgo(iso) {
@@ -50,14 +96,16 @@ function fmtDateTime(iso) {
 }
 
 async function refreshAll() {
-  const [senior, alertas, contactos] = await Promise.all([
+  const [senior, alertas, contactos, recordatorios] = await Promise.all([
     api("/senior"),
     api("/alertas"),
     api("/contactos"),
+    api("/recordatorios"),
   ]);
   state.senior = senior;
   state.alertas = alertas;
   state.contactos = contactos;
+  state.recordatorios = recordatorios;
   render();
 }
 
@@ -68,6 +116,168 @@ function render() {
   if (state.tab === "inicio") renderInicio();
   else if (state.tab === "alertas") renderAlertas();
   else renderPerfil();
+}
+
+function renderListaRecordatorios() {
+  if (!state.recordatorios.length) {
+    return `<p class="empty-hint">Todavía no hay recordatorios. Toca “Agregar” para crear el primero.</p>`;
+  }
+
+  const filas = state.recordatorios
+    .map((r) => {
+      const tipo = TIPOS_RECORDATORIO[r.tipo] || TIPOS_RECORDATORIO.otro;
+      const sub = [r.detalle, fmtHora(r.hora)].filter(Boolean).join(" · ");
+      return `
+      <div class="reminder-card ${r.hecho ? "hecho" : ""}">
+        <button class="rec-main" data-toggle="${r.id}" aria-pressed="${r.hecho}">
+          <div class="icon-badge" style="background:${tipo.color}18;color:${tipo.color}">
+            ${r.hecho ? ICONS.check : ICONS[tipo.icono]}
+          </div>
+          <div class="rec-body">
+            <p class="title">${esc(r.titulo)}</p>
+            ${sub ? `<p class="sub">${esc(sub)}</p>` : ""}
+          </div>
+        </button>
+        <button class="rec-del" data-del="${r.id}" aria-label="Eliminar recordatorio">
+          ${ICONS.basura}
+        </button>
+      </div>`;
+    })
+    .join("");
+
+  return `<div class="reminder-list">${filas}</div>`;
+}
+
+function conectarEventosRecordatorios() {
+  const btnAgregar = document.getElementById("btnAgregarRec");
+  if (btnAgregar) btnAgregar.onclick = abrirFormRecordatorio;
+
+  screenEl.querySelectorAll("[data-toggle]").forEach((btn) => {
+    btn.onclick = async () => {
+      await api(`/recordatorios/${btn.dataset.toggle}/alternar-hecho`, {
+        method: "POST",
+      });
+      refreshAll();
+    };
+  });
+
+  screenEl.querySelectorAll("[data-del]").forEach((btn) => {
+    btn.onclick = async () => {
+      await api(`/recordatorios/${btn.dataset.del}`, { method: "DELETE" });
+      refreshAll();
+    };
+  });
+}
+
+// El formulario se monta fuera de #screen: asi el refresco automatico
+// cada 15s puede redibujar la pantalla sin borrar lo que el usuario
+// esta escribiendo.
+function abrirFormRecordatorio() {
+  let tipoElegido = "medicamento";
+
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = `
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="recTitle">
+      <h2 id="recTitle">Nuevo recordatorio</h2>
+
+      <label for="recTitulo">¿Qué hay que recordar?</label>
+      <input id="recTitulo" type="text" maxlength="80" placeholder="Medicamento de la tarde" />
+
+      <label for="recDetalle">Detalle <span>(opcional)</span></label>
+      <input id="recDetalle" type="text" maxlength="120" placeholder="Losartán 50mg" />
+
+      <label for="recHora">Hora <span>(opcional)</span></label>
+      <input id="recHora" type="time" />
+
+      <label>Tipo</label>
+      <div class="tipo-picker" id="recTipos">
+        ${Object.entries(TIPOS_RECORDATORIO)
+          .map(
+            ([clave, t]) => `
+          <button type="button" data-tipo="${clave}" class="${
+              clave === tipoElegido ? "activo" : ""
+            }">${ICONS[t.icono]}<span>${t.etiqueta}</span></button>`
+          )
+          .join("")}
+      </div>
+
+      <p class="modal-error" id="recError" hidden></p>
+
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="recCancelar">Cancelar</button>
+        <button class="btn btn-primary" id="recGuardar">Guardar</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const inputTitulo = overlay.querySelector("#recTitulo");
+  const inputDetalle = overlay.querySelector("#recDetalle");
+  const inputHora = overlay.querySelector("#recHora");
+  const errorEl = overlay.querySelector("#recError");
+  const btnGuardar = overlay.querySelector("#recGuardar");
+
+  const cerrar = () => {
+    document.removeEventListener("keydown", alPresionarTecla);
+    overlay.remove();
+  };
+
+  function alPresionarTecla(e) {
+    if (e.key === "Escape") cerrar();
+  }
+  document.addEventListener("keydown", alPresionarTecla);
+
+  // Tocar el fondo oscuro cierra; tocar dentro de la tarjeta no.
+  overlay.onclick = (e) => {
+    if (e.target === overlay) cerrar();
+  };
+
+  overlay.querySelectorAll("#recTipos button").forEach((btn) => {
+    btn.onclick = () => {
+      tipoElegido = btn.dataset.tipo;
+      overlay
+        .querySelectorAll("#recTipos button")
+        .forEach((b) => b.classList.toggle("activo", b === btn));
+    };
+  });
+
+  const guardar = async () => {
+    const titulo = inputTitulo.value.trim();
+    if (!titulo) {
+      errorEl.textContent = "Escribe qué hay que recordar.";
+      errorEl.hidden = false;
+      inputTitulo.focus();
+      return;
+    }
+
+    btnGuardar.disabled = true;
+    try {
+      await api("/recordatorios", {
+        method: "POST",
+        body: JSON.stringify({
+          titulo,
+          detalle: inputDetalle.value.trim(),
+          hora: inputHora.value,
+          tipo: tipoElegido,
+        }),
+      });
+      cerrar();
+      refreshAll();
+    } catch (err) {
+      errorEl.textContent = err.message;
+      errorEl.hidden = false;
+      btnGuardar.disabled = false;
+    }
+  };
+
+  btnGuardar.onclick = guardar;
+  overlay.querySelector("#recCancelar").onclick = cerrar;
+  inputTitulo.onkeydown = (e) => {
+    if (e.key === "Enter") guardar();
+  };
+
+  inputTitulo.focus();
 }
 
 function renderInicio() {
@@ -125,14 +335,11 @@ function renderInicio() {
     </div>
 
     <div class="section">
-      <p class="section-title">Recordatorio</p>
-      <div class="reminder-card">
-        <div class="icon-badge" style="color:var(--cuidado)">${ICONS.pill}</div>
-        <div>
-          <p class="title">Medicamento de la tarde</p>
-          <p class="sub">Losartán 50mg · 6:00 pm</p>
-        </div>
+      <div class="section-head">
+        <p class="section-title">Recordatorios</p>
+        <button class="add-btn" id="btnAgregarRec">${ICONS.mas} Agregar</button>
       </div>
+      ${renderListaRecordatorios()}
     </div>
   `;
 
@@ -144,6 +351,8 @@ function renderInicio() {
     const principal = state.contactos.find((c) => c.rol.includes("principal")) || state.contactos[0];
     window.location.href = `tel:${(principal?.telefono || "").replace(/\s/g, "")}`;
   };
+
+  conectarEventosRecordatorios();
 }
 
 function renderAlertas() {

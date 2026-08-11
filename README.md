@@ -59,6 +59,10 @@ Tu iPhone y tu computadora deben estar **conectados a la misma red WiFi**.
 
 - **Inicio**: ubicación simulada de Rosa Elena, estado, radio de zona
   segura, botón "Llamar" (marca al contacto principal) y "Marcar visto".
+- **Recordatorios** (abajo en Inicio): toca **"+ Agregar"** para crear
+  uno (medicamento, cita u otro, con hora opcional). Tócalo para
+  marcarlo como hecho — se tacha y se va al final; tócalo otra vez
+  para deshacerlo. El ícono de basura lo elimina.
 - **Alertas**: botón **"Simular escaneo"** — crea una alerta real,
   nueva, con hora actual, guardada en `db.json`. Puedes marcarla como
   atendida y el estado del adulto mayor vuelve a "presente".

@@ -1,7 +1,7 @@
 // Subir este numero cuando cambie el frontend. Al cambiar el nombre del
 // cache, el "activate" de abajo borra el cache viejo y el usuario deja de
 // ver la version anterior.
-const CACHE = "conecta-senior-v2";
+const CACHE = "conecta-senior-v3";
 const ASSETS = ["/", "/styles.css", "/app.js", "/manifest.json"];
 
 self.addEventListener("install", (e) => {
