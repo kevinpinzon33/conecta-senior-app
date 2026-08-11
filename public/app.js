@@ -324,7 +324,7 @@ function renderInicio() {
           </div>
         </div>
         <div class="map-meta">
-          <span>Radio zona segura: ${s.zonaSeguraRadioM} m</span>
+          <span>Radio zona segura: ${s.zonaSegura.radioM} m</span>
         </div>
       </div>
     </div>

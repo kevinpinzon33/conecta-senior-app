@@ -1,0 +1,203 @@
+/* Estilos propios del simulador. Reutiliza las variables de marca de
+   styles.css, pero con una densidad de herramienta, no de app. */
+
+.sim-body {
+  background: var(--bg);
+  min-height: 100vh;
+  padding: 0 0 40px;
+}
+
+.sim-wrap {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+.sim-head {
+  padding: 22px 0 14px;
+}
+.sim-brand { display: flex; align-items: center; gap: 11px; }
+.sim-brand h1 {
+  font-family: var(--font-display);
+  font-size: 21px; font-weight: 600; margin: 0; color: var(--texto);
+}
+.sim-brand p {
+  margin: 2px 0 0; font-size: 11.5px; color: var(--texto-muted);
+}
+
+.sim-nota {
+  margin: 0 0 16px;
+  font-size: 12.5px; line-height: 1.55; color: var(--texto-muted);
+  background: rgba(201,165,53,0.07);
+  border: 1px solid var(--linea);
+  border-radius: 14px; padding: 12px 14px;
+}
+.sim-nota b { color: var(--texto); font-weight: 600; }
+.sim-nota a { color: var(--noche); }
+
+/* --- Mapa --- */
+.sim-mapa {
+  position: relative;
+  height: 340px;
+  border-radius: 20px;
+  border: 1px solid var(--linea);
+  background:
+    linear-gradient(180deg, #1F2530 0%, #1B2029 60%, #181B21 100%);
+  overflow: hidden;
+  margin-bottom: 14px;
+  touch-action: none; /* el arrastre no debe hacer scroll de la pagina */
+}
+
+.sim-zona {
+  position: absolute;
+  left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 2px dashed rgba(46,158,94,0.5);
+  background: rgba(46,158,94,0.07);
+  pointer-events: none;
+}
+.sim-mapa.fuera .sim-zona {
+  border-color: rgba(232,98,44,0.55);
+  background: rgba(232,98,44,0.07);
+}
+
+.sim-centro {
+  position: absolute;
+  left: 50%; top: 50%;
+  width: 8px; height: 8px; margin: -4px 0 0 -4px;
+  border-radius: 50%;
+  background: var(--texto-muted);
+  pointer-events: none;
+}
+
+.sim-punto {
+  position: absolute;
+  width: 46px; height: 46px;
+  margin: -23px 0 0 -23px;
+  cursor: grab;
+  display: flex; align-items: center; justify-content: center;
+}
+.sim-punto:active { cursor: grabbing; }
+.sim-punto-halo {
+  position: absolute; inset: 0;
+  border-radius: 50%;
+  background: rgba(46,158,94,0.18);
+  border: 1px solid rgba(46,158,94,0.5);
+}
+.sim-punto-nucleo {
+  position: relative;
+  width: 30px; height: 30px; border-radius: 50%;
+  background: var(--noche); color: var(--bg);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-display); font-size: 14px; font-weight: 600;
+  border: 2px solid var(--presente);
+}
+.sim-mapa.fuera .sim-punto-halo {
+  background: rgba(232,98,44,0.18);
+  border-color: rgba(232,98,44,0.5);
+}
+.sim-mapa.fuera .sim-punto-nucleo { border-color: var(--senal); }
+
+.sim-escala {
+  position: absolute; left: 12px; bottom: 10px;
+  font-family: var(--font-mono); font-size: 10px;
+  color: var(--texto-muted);
+}
+
+/* --- Paneles --- */
+.sim-panel {
+  background: var(--panel);
+  border: 1px solid var(--linea);
+  border-radius: 16px;
+  padding: 14px;
+  margin-bottom: 12px;
+}
+.sim-titulo {
+  margin: 0 0 11px;
+  font-size: 12px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--texto-muted);
+}
+
+.sim-metricas {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+}
+.sim-metrica {
+  background: var(--panel-alt); border-radius: 12px; padding: 10px;
+  text-align: center;
+}
+.sim-metrica .etiqueta {
+  display: block; font-size: 10px; color: var(--texto-muted);
+  margin-bottom: 4px; line-height: 1.3;
+}
+.sim-metrica b {
+  font-family: var(--font-mono); font-size: 15px; color: var(--texto);
+}
+.sim-metrica b.dentro { color: var(--presente); }
+.sim-metrica b.fuera { color: var(--senal); }
+
+.sim-umbrales {
+  margin: 10px 0 0; font-family: var(--font-mono);
+  font-size: 11px; color: var(--texto-muted); line-height: 1.5;
+}
+
+.sim-fila { margin-bottom: 12px; }
+.sim-fila label {
+  display: block; font-size: 12.5px; color: var(--texto-muted);
+  margin-bottom: 7px;
+}
+.sim-fila label span {
+  font-family: var(--font-mono); color: var(--noche); font-weight: 600;
+}
+.sim-fila input[type="range"] { width: 100%; accent-color: var(--noche); }
+
+.sim-btn-ancho { width: 100%; }
+
+.sim-check {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 12px; font-size: 12.5px; color: var(--texto-muted);
+  cursor: pointer;
+}
+.sim-check input { accent-color: var(--noche); width: 16px; height: 16px; }
+
+.sim-escenarios { display: grid; gap: 8px; }
+.sim-btn {
+  display: block; width: 100%; text-align: left;
+  background: var(--panel-alt); border: 1px solid var(--linea);
+  border-radius: 12px; padding: 11px 13px; cursor: pointer;
+  font-family: var(--font-body);
+}
+.sim-btn b {
+  display: block; font-size: 13px; font-weight: 600; color: var(--texto);
+}
+.sim-btn small {
+  display: block; margin-top: 2px;
+  font-size: 11.5px; color: var(--texto-muted); line-height: 1.4;
+}
+.sim-btn:active { border-color: var(--noche); }
+.sim-btn:disabled { opacity: 0.5; cursor: default; }
+.sim-btn-plano {
+  text-align: center; font-size: 12.5px; font-weight: 600;
+  color: var(--texto-muted);
+}
+
+/* --- Registro --- */
+.sim-log { max-height: 260px; overflow-y: auto; }
+.sim-log-vacio {
+  margin: 0; font-size: 12px; color: var(--texto-muted); text-align: center;
+  padding: 12px 0;
+}
+.sim-linea {
+  display: flex; gap: 9px; align-items: baseline;
+  padding: 8px 0; border-bottom: 1px solid var(--linea);
+  font-size: 12px; line-height: 1.45;
+}
+.sim-linea:last-child { border-bottom: none; }
+.sim-linea .hora {
+  font-family: var(--font-mono); font-size: 10.5px;
+  color: var(--texto-muted); flex-shrink: 0;
+}
+.sim-linea .texto { color: var(--texto-muted); }
+.sim-linea.ok .texto { color: var(--presente); }
+.sim-linea.alerta .texto { color: var(--senal); font-weight: 600; }
+.sim-linea.descartada .texto { color: var(--cuidado); }

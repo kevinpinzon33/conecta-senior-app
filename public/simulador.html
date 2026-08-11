@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Simulador de zona segura — Conecta Senior</title>
+
+<meta name="theme-color" content="#181B21" />
+<link rel="icon" href="icons/icon-192.png" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Raleway:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+<link rel="stylesheet" href="styles.css" />
+<link rel="stylesheet" href="simulador.css" />
+</head>
+<body class="sim-body">
+
+<div class="sim-wrap">
+
+  <header class="sim-head">
+    <div class="sim-brand">
+      <img src="icons/logo-mark.png" alt="" width="24" height="24" />
+      <div>
+        <h1>Simulador de zona segura</h1>
+        <p>Herramienta de prueba — no es parte de la app del cuidador</p>
+      </div>
+    </div>
+  </header>
+
+  <p class="sim-nota">
+    Arrastra el punto para mover al adulto mayor y presiona
+    <b>Enviar ubicación</b>. El servidor decide si salió de la zona con las
+    mismas reglas que usaría un teléfono real. Deja
+    <a href="/" target="_blank">la app del cuidador</a> abierta en otra
+    pestaña para ver llegar las alertas.
+  </p>
+
+  <!-- Mapa -->
+  <div class="sim-mapa" id="mapa">
+    <div class="sim-zona" id="zona"></div>
+    <div class="sim-centro" id="centro" title="Centro de la zona segura"></div>
+    <div class="sim-punto" id="punto" title="Arrástrame">
+      <span class="sim-punto-halo"></span>
+      <span class="sim-punto-nucleo">R</span>
+    </div>
+    <div class="sim-escala" id="escala"></div>
+  </div>
+
+  <!-- Lectura actual -->
+  <div class="sim-panel">
+    <div class="sim-metricas">
+      <div class="sim-metrica">
+        <span class="etiqueta">Distancia al centro</span>
+        <b id="mDistancia">—</b>
+      </div>
+      <div class="sim-metrica">
+        <span class="etiqueta">Estado confirmado</span>
+        <b id="mEstado">—</b>
+      </div>
+      <div class="sim-metrica">
+        <span class="etiqueta">Lecturas seguidas</span>
+        <b id="mLecturas">—</b>
+      </div>
+    </div>
+    <p class="sim-umbrales" id="mUmbrales">—</p>
+  </div>
+
+  <!-- Controles -->
+  <div class="sim-panel">
+    <p class="sim-titulo">Enviar una lectura</p>
+    <div class="sim-fila">
+      <label for="inPrecision">Precisión GPS <span id="valPrecision">15</span> m</label>
+      <input type="range" id="inPrecision" min="5" max="150" value="15" />
+    </div>
+    <button class="btn btn-primary sim-btn-ancho" id="btnEnviar">
+      Enviar ubicación
+    </button>
+    <label class="sim-check">
+      <input type="checkbox" id="chkAuto" />
+      <span>Enviar automáticamente cada 3 segundos</span>
+    </label>
+  </div>
+
+  <div class="sim-panel">
+    <p class="sim-titulo">Escenarios</p>
+    <div class="sim-escenarios">
+      <button class="sim-btn" data-escenario="ruido">
+        <b>Ruido GPS en el borde</b>
+        <small>Persona quieta junto al límite. No debería alertar.</small>
+      </button>
+      <button class="sim-btn" data-escenario="salir">
+        <b>Salir caminando</b>
+        <small>Se aleja de verdad. Debería alertar.</small>
+      </button>
+      <button class="sim-btn" data-escenario="volver">
+        <b>Volver a casa</b>
+        <small>Regresa al centro de la zona.</small>
+      </button>
+      <button class="sim-btn" data-escenario="basura">
+        <b>Lectura basura</b>
+        <small>Salto imposible y precisión pésima. Se descarta.</small>
+      </button>
+    </div>
+  </div>
+
+  <div class="sim-panel">
+    <p class="sim-titulo">Zona segura</p>
+    <div class="sim-fila">
+      <label for="inRadio">Radio <span id="valRadio">300</span> m</label>
+      <input type="range" id="inRadio" min="50" max="1000" step="10" value="300" />
+    </div>
+    <button class="sim-btn sim-btn-plano" id="btnReiniciar">
+      Reiniciar simulación
+    </button>
+  </div>
+
+  <div class="sim-panel">
+    <p class="sim-titulo">Registro</p>
+    <div class="sim-log" id="log">
+      <p class="sim-log-vacio">Todavía no has enviado ninguna lectura.</p>
+    </div>
+  </div>
+
+</div>
+
+<script src="simulador.js"></script>
+</body>
+</html>

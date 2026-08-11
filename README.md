@@ -69,6 +69,18 @@ Tu iPhone y tu computadora deben estar **conectados a la misma red WiFi**.
 - **Perfil**: info médica y contactos de emergencia (los botones de
   llamada abren el marcador del iPhone).
 
+### Simulador de zona segura
+
+Abre **`/simulador.html`** (por ejemplo `http://localhost:3000/simulador.html`).
+Es una herramienta de prueba, aparte de la app: arrastras un punto sobre
+el mapa y el servidor decide si el adulto mayor salió de su zona segura,
+con las mismas reglas que usaría un teléfono real.
+
+Trae escenarios de un clic para ver que el ruido normal del GPS **no**
+genera alertas falsas, que alejarse de verdad **sí** alerta, y que las
+lecturas basura se descartan. Para una demo, déjalo abierto en una
+pantalla y la app del cuidador en otra.
+
 Todo lo que hagas se guarda en `conecta-senior-app/db.json` — puedes
 abrir ese archivo con cualquier editor de texto para ver los datos
 crudos, o borrarlo para reiniciar con los datos de ejemplo.

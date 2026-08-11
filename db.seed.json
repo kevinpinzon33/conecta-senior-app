@@ -14,7 +14,17 @@
       "lng": -99.1620,
       "actualizadoEn": "2026-08-03T15:12:00.000Z"
     },
-    "zonaSeguraRadioM": 300
+    "zonaSegura": {
+      "lat": 19.4180,
+      "lng": -99.1620,
+      "radioM": 300
+    },
+    "seguimiento": {
+      "estaFuera": false,
+      "lecturasFuera": 0,
+      "lecturasDentro": 0,
+      "ultimaLectura": null
+    }
   },
   "contactos": [
     { "id": 1, "nombre": "Daniela Vidal", "rol": "Hija - Contacto principal", "telefono": "+52 55 1234 5678" },
