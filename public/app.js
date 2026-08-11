@@ -259,6 +259,18 @@ tabbar.querySelectorAll(".tab").forEach((btn) => {
 
 // Registrar service worker para que funcione como PWA instalable
 if ("serviceWorker" in navigator) {
+  // Si ya habia un service worker controlando la pantalla y entra uno
+  // nuevo, es que se desplego una version nueva: recargamos una sola vez
+  // para mostrarla al instante, en vez de dejar al usuario viendo los
+  // archivos viejos hasta que cierre y abra la app dos veces.
+  const habiaControlador = !!navigator.serviceWorker.controller;
+  let recargando = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (!habiaControlador || recargando) return;
+    recargando = true;
+    window.location.reload();
+  });
+
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("sw.js").catch(() => {});
   });
