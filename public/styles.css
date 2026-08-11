@@ -19,6 +19,10 @@
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
+/* Los enlaces de la app son botones (llamar, contactos), no texto
+   enlazado: el subrayado por defecto los ensucia. */
+a { text-decoration: none; color: inherit; }
+
 html, body {
   margin: 0;
   padding: 0;
@@ -45,12 +49,29 @@ html, body {
   background: var(--bg);
   flex-shrink: 0;
 }
+.topbar-fila {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px 0 20px;
+}
+.topbar-salir {
+  display: flex; align-items: center; gap: 7px;
+  background: var(--panel-alt); border: 1px solid var(--linea);
+  color: var(--texto-muted); font-family: var(--font-body);
+  font-size: 12px; font-weight: 600;
+  padding: 6px 11px; border-radius: 999px; cursor: pointer;
+}
+.topbar-salir:active { color: var(--noche); border-color: var(--noche); }
+.topbar-usuario { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 .topbar-brand {
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 10px 20px 0;
 }
+.topbar-fila .topbar-brand { padding: 0; }
 .topbar-brand img { height: 26px; width: auto; }
 .topbar-brand .word {
   display: flex;
@@ -454,3 +475,212 @@ html, body {
 }
 
 .loading { padding: 40px 20px; text-align: center; color: var(--texto-muted); font-size: 13px; }
+
+/* ======================================================================
+   LOGIN
+   ====================================================================== */
+
+body.en-login #screen { display: flex; align-items: center; }
+
+.login {
+  width: 100%;
+  padding: 24px 22px 32px;
+}
+.login-marca { text-align: center; margin-bottom: 26px; }
+.login-marca img { margin: 0 auto 10px; }
+.login-marca h1 {
+  font-family: var(--font-display); font-size: 27px; font-weight: 600;
+  margin: 0; color: var(--texto); letter-spacing: 0.02em;
+}
+.login-marca p {
+  margin: 4px 0 0; font-size: 12.5px; color: var(--texto-muted);
+  letter-spacing: 0.04em;
+}
+
+.login-form label {
+  display: block; font-size: 12.5px; font-weight: 600;
+  color: var(--texto-muted); margin-bottom: 6px;
+}
+.login-form input {
+  width: 100%; margin-bottom: 15px;
+  background: var(--panel); border: 1px solid var(--linea);
+  border-radius: 13px; padding: 14px 14px;
+  font-family: var(--font-body); font-size: 16px; color: var(--texto);
+}
+.login-form input::placeholder { color: var(--texto-muted); opacity: 0.6; }
+.login-form input:focus { outline: none; border-color: var(--noche); }
+
+.login-error {
+  margin: 0 0 13px; font-size: 12.5px; color: var(--senal);
+  background: rgba(232,98,44,0.1); border-radius: 10px; padding: 10px 12px;
+}
+.login-btn { width: 100%; padding: 15px; font-size: 15px; }
+.login-btn:disabled { opacity: 0.65; }
+
+/* Atajos de prueba — se quitan al conectar la base de datos real */
+.login-demo {
+  margin-top: 26px; padding-top: 18px;
+  border-top: 1px dashed var(--linea);
+}
+.login-demo-titulo {
+  margin: 0 0 10px; font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--texto-muted); text-align: center;
+}
+.login-demo-fila {
+  display: flex; align-items: center; justify-content: space-between;
+  width: 100%; margin-bottom: 8px;
+  background: var(--panel-alt); border: 1px solid var(--linea);
+  border-radius: 12px; padding: 11px 13px; cursor: pointer;
+  font-family: var(--font-body);
+}
+.login-demo-fila .rol { font-size: 12.5px; font-weight: 600; color: var(--texto); }
+.login-demo-fila .cred {
+  font-family: var(--font-mono); font-size: 11px; color: var(--noche);
+}
+.login-demo-fila:active { border-color: var(--noche); }
+
+/* ======================================================================
+   VISTA DEL ADULTO MAYOR
+   Todo mas grande y con menos elementos: menos cosas que hacer, mas
+   faciles de leer y de tocar.
+   ====================================================================== */
+
+.vista-mayor .hero { padding: 18px 20px 12px; }
+.vista-mayor .hero-greeting { font-size: 16px; }
+.vista-mayor .hero-title { font-size: 34px; }
+.vista-mayor .section-title { font-size: 15px; }
+.vista-mayor .tab { font-size: 12px; padding: 8px 16px; }
+
+.ayuda-mayor {
+  margin: 0 0 10px; font-size: 13.5px; line-height: 1.45;
+  color: var(--texto-muted);
+}
+
+/* Tarjeta de estado */
+.estado-mayor {
+  display: flex; align-items: center; gap: 14px;
+  margin: 0 20px 12px; padding: 18px;
+  border-radius: 20px; border: 1px solid var(--linea);
+  background: var(--panel);
+}
+.estado-mayor.bien { border-color: rgba(46,158,94,0.4); background: rgba(46,158,94,0.08); }
+.estado-mayor.alerta { border-color: rgba(232,98,44,0.45); background: rgba(232,98,44,0.09); }
+.estado-mayor-icono { flex-shrink: 0; display: flex; }
+.estado-mayor.bien .estado-mayor-icono { color: var(--presente); }
+.estado-mayor.alerta .estado-mayor-icono { color: var(--senal); }
+.estado-mayor-titulo {
+  margin: 0; font-size: 19px; font-weight: 600; line-height: 1.25;
+  color: var(--texto);
+}
+.estado-mayor-sub {
+  margin: 4px 0 0; font-size: 14px; color: var(--texto-muted); line-height: 1.4;
+}
+
+/* Ubicación */
+.ubicacion-mayor {
+  margin: 0 20px 14px; padding: 16px 18px;
+  background: var(--panel); border: 1px solid var(--linea); border-radius: 20px;
+}
+.ubicacion-mayor-fila { display: flex; gap: 10px; align-items: flex-start; }
+.ubicacion-mayor-fila svg { margin-top: 4px; flex-shrink: 0; color: var(--noche); }
+.ubicacion-mayor .etiqueta {
+  margin: 0; font-size: 12.5px; color: var(--texto-muted);
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.ubicacion-mayor .valor {
+  margin: 3px 0 0; font-size: 16.5px; color: var(--texto); line-height: 1.35;
+}
+.ubicacion-mayor-hora {
+  display: flex; align-items: center; gap: 6px;
+  margin: 12px 0 0; padding-top: 11px; border-top: 1px solid var(--linea);
+  font-size: 13px; color: var(--texto-muted);
+}
+
+/* Botón grande de llamar */
+.btn-llamar-mayor {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  margin: 0 20px 4px; padding: 17px;
+  background: var(--noche); color: var(--bg);
+  border-radius: 18px; font-size: 17px; font-weight: 700;
+  font-family: var(--font-body);
+}
+.btn-llamar-mayor:active { transform: scale(0.985); }
+.btn-llamar-mayor svg { width: 19px; height: 19px; }
+
+/* Recordatorios del adulto mayor */
+.rec-mayor-lista { display: grid; gap: 10px; }
+.rec-mayor {
+  display: flex; align-items: center; gap: 14px; width: 100%;
+  background: var(--panel); border: 1px solid var(--linea);
+  border-radius: 18px; padding: 17px 16px; cursor: pointer;
+  font-family: var(--font-body); text-align: left;
+}
+.rec-mayor:active { border-color: var(--noche); }
+.rec-mayor .icon-badge { padding: 11px; }
+.rec-mayor .icon-badge svg { width: 20px; height: 20px; }
+.rec-mayor-body { flex: 1; min-width: 0; }
+.rec-mayor .title {
+  margin: 0; font-size: 17px; font-weight: 600; color: var(--texto);
+  line-height: 1.3;
+}
+.rec-mayor .sub {
+  margin: 4px 0 0; font-size: 14px; color: var(--texto-muted); line-height: 1.35;
+}
+.rec-mayor.hecho { opacity: 0.62; }
+.rec-mayor.hecho .title { text-decoration: line-through; font-weight: 500; }
+.rec-mayor-marca {
+  flex-shrink: 0; font-size: 11.5px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.05em; color: var(--presente);
+}
+
+/* Alertas del adulto mayor */
+.alerta-mayor {
+  display: flex; gap: 14px; align-items: flex-start;
+  background: var(--panel); border: 1px solid var(--linea);
+  border-radius: 18px; padding: 16px; margin-bottom: 10px;
+}
+.alerta-mayor .icon-badge { padding: 10px; }
+.alerta-mayor .icon-badge svg { width: 19px; height: 19px; }
+.alerta-mayor-body { flex: 1; min-width: 0; }
+.alerta-mayor .title {
+  margin: 0; font-size: 16.5px; font-weight: 600; color: var(--texto);
+  line-height: 1.3;
+}
+.alerta-mayor .sub {
+  display: flex; align-items: center; gap: 5px;
+  margin: 6px 0 0; font-size: 13.5px; color: var(--texto-muted); line-height: 1.35;
+}
+.alerta-mayor .cuando {
+  margin: 6px 0 0; font-family: var(--font-mono);
+  font-size: 12px; color: var(--texto-muted);
+}
+
+/* Contactos del adulto mayor */
+.contacto-mayor-lista { display: grid; gap: 10px; }
+.contacto-mayor {
+  display: flex; align-items: center; gap: 13px;
+  background: var(--panel); border: 1px solid var(--linea);
+  border-radius: 18px; padding: 15px 16px;
+}
+.contacto-mayor:active { border-color: var(--noche); }
+.contacto-mayor .contact-avatar { width: 42px; height: 42px; color: var(--noche); }
+.contacto-mayor .contact-avatar svg { width: 19px; height: 19px; }
+.contacto-mayor-body { flex: 1; min-width: 0; }
+.contacto-mayor .title { margin: 0; font-size: 17px; font-weight: 600; color: var(--texto); }
+.contacto-mayor .sub { margin: 3px 0 0; font-size: 13.5px; color: var(--texto-muted); }
+.contacto-mayor-llamar {
+  flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  width: 44px; height: 44px; border-radius: 50%;
+  background: var(--noche); color: var(--bg);
+}
+.contacto-mayor-llamar svg { width: 19px; height: 19px; }
+
+.vista-mayor .empty-hint { font-size: 14px; padding: 22px 16px; }
+.vista-mayor .medinfo-row { padding: 16px 14px; }
+.vista-mayor .medinfo-row .title { font-size: 15px; }
+.vista-mayor .medinfo-row .sub { font-size: 14px; margin-top: 3px; }
+.vista-mayor .profile-head h1 { font-size: 24px; }
+.vista-mayor .profile-head p { font-size: 14.5px; }
+.vista-mayor .qr-card .title { font-size: 15px; }
+.vista-mayor .qr-card .sub { font-size: 13px; }

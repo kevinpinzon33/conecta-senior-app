@@ -57,6 +57,17 @@ Tu iPhone y tu computadora deben estar **conectados a la misma red WiFi**.
 
 ## 3. Qué puedes probar
 
+### Entrar a la app
+
+La app pide usuario y contraseña, y **según quién entre muestra una
+interfaz distinta**. Hay dos usuarios de prueba (aparecen listados en la
+misma pantalla de login, así que no hay que memorizarlos):
+
+| Usuario | Contraseña | Qué ve |
+|---|---|---|
+| `rosa` | `rosa123` | La vista del **adulto mayor**: su estado, sus recordatorios y sus contactos, con letra más grande |
+| `daniela` | `daniela123` | La vista del **contacto de emergencia**: mapa, alertas y administración de recordatorios |
+
 - **Inicio**: ubicación simulada de Rosa Elena, estado, radio de zona
   segura, botón "Llamar" (marca al contacto principal) y "Marcar visto".
 - **Recordatorios** (abajo en Inicio): toca **"+ Agregar"** para crear

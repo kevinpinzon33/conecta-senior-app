@@ -1,4 +1,26 @@
 {
+  "_comentario": "Datos de ejemplo INVENTADOS. Las claves van en texto plano solo porque son usuarios de prueba; al conectar la base de datos real hay que guardarlas hasheadas (ver seccion de autenticacion en server.js).",
+  "usuarios": [
+    {
+      "id": 1,
+      "usuario": "rosa",
+      "clave": "rosa123",
+      "rol": "adulto_mayor",
+      "nombre": "Rosa Elena Vidal",
+      "seniorId": 1,
+      "contactoId": null
+    },
+    {
+      "id": 2,
+      "usuario": "daniela",
+      "clave": "daniela123",
+      "rol": "contacto_emergencia",
+      "nombre": "Daniela Vidal",
+      "seniorId": 1,
+      "contactoId": 1
+    }
+  ],
+  "sesiones": [],
   "senior": {
     "id": 1,
     "nombre": "Rosa Elena Vidal",

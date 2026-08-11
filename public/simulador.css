@@ -33,7 +33,8 @@
   border-radius: 14px; padding: 12px 14px;
 }
 .sim-nota b { color: var(--texto); font-weight: 600; }
-.sim-nota a { color: var(--noche); }
+/* Este si es un enlace de texto de verdad, asi que lleva subrayado. */
+.sim-nota a { color: var(--noche); text-decoration: underline; }
 
 /* --- Mapa --- */
 .sim-mapa {

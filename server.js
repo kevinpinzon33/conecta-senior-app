@@ -1,6 +1,7 @@
 const express = require("express");
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 
 const PORT = process.env.PORT || 3000;
 const DB_PATH = path.join(__dirname, "db.json");
@@ -25,6 +26,8 @@ function loadDb() {
 function normalizarDb(db) {
   if (!db.recordatorios) db.recordatorios = [];
   if (!db.nextRecordatorioId) db.nextRecordatorioId = 1;
+  if (!db.usuarios) db.usuarios = [];
+  if (!db.sesiones) db.sesiones = [];
   if (!db.senior.zonaSegura) {
     db.senior.zonaSegura = {
       lat: db.senior.ubicacion.lat,
@@ -51,19 +54,178 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
-// --- API -----------------------------------------------------------------
+// --- Autenticacion y roles ----------------------------------------------
+//
+// Hay dos roles y cada uno ve una interfaz distinta:
+//   - adulto_mayor        : ve SUS recordatorios, SUS alertas y su estado.
+//   - contacto_emergencia : hace seguimiento del adulto mayor a su cargo.
+//
+// El vinculo entre ambos es el campo `seniorId` del usuario. Hoy el
+// prototipo tiene un solo adulto mayor, pero la forma de los datos ya es
+// la correcta para cuando lleguen varios desde la base de datos real.
+//
+// ┌───────────────────────────────────────────────────────────────────┐
+// │ PENDIENTE ANTES DE CONECTAR DATOS REALES                          │
+// │                                                                   │
+// │ Esto es suficiente para un prototipo con usuarios inventados,     │
+// │ pero NO para datos de personas reales. Antes de ese paso hay que: │
+// │   1. Guardar las claves hasheadas (bcrypt/scrypt), nunca en       │
+// │      texto plano, y borrar el campo `clave` del seed.             │
+// │   2. Mover las sesiones a la base de datos real, no a db.json     │
+// │      (que ademas se borra en cada despliegue de Render).          │
+// │   3. Limitar los intentos de login para frenar fuerza bruta.      │
+// │   4. Quitar de la pantalla de login la lista de usuarios de       │
+// │      prueba (ver login.js).                                       │
+// │   5. Proteger /api/ubicacion y los endpoints del simulador, hoy   │
+// │      abiertos a proposito para poder hacer demos.                 │
+// └───────────────────────────────────────────────────────────────────┘
 
-app.get("/api/senior", (req, res) => {
+const DURACION_SESION_MS = 12 * 60 * 60 * 1000; // 12 horas
+
+// --- Puntos de cambio para la base de datos real ---
+// Estas tres funciones son lo unico que hay que reescribir cuando los
+// usuarios dejen de venir de db.json y vengan de la base real.
+
+function buscarUsuarioPorNombre(db, usuario) {
+  const buscado = String(usuario || "").trim().toLowerCase();
+  return db.usuarios.find((u) => u.usuario.toLowerCase() === buscado) || null;
+}
+
+function verificarClave(usuarioDb, clave) {
+  // Comparacion en texto plano porque son usuarios de prueba. Con la base
+  // real esto pasa a ser una verificacion de hash.
+  return usuarioDb.clave === String(clave || "");
+}
+
+function seniorDeUsuario(db, usuario) {
+  // Con la base real aqui se buscaria dentro de una lista de adultos
+  // mayores; hoy solo hay uno y basta con comprobar que sea el suyo.
+  if (!usuario || db.senior.id !== usuario.seniorId) return null;
+  return db.senior;
+}
+
+// --- Sesiones ---
+
+function crearSesion(db, usuarioDb) {
+  const token = crypto.randomBytes(32).toString("hex");
+  db.sesiones.push({
+    token,
+    usuarioId: usuarioDb.id,
+    creadaEn: new Date().toISOString(),
+    expiraEn: new Date(Date.now() + DURACION_SESION_MS).toISOString(),
+  });
+  return token;
+}
+
+function purgarSesionesVencidas(db) {
+  const ahora = Date.now();
+  db.sesiones = db.sesiones.filter(
+    (s) => new Date(s.expiraEn).getTime() > ahora
+  );
+}
+
+function usuarioDeLaPeticion(req, db) {
+  const cabecera = req.headers.authorization || "";
+  if (!cabecera.startsWith("Bearer ")) return null;
+  const token = cabecera.slice(7);
+
+  purgarSesionesVencidas(db);
+  const sesion = db.sesiones.find((s) => s.token === token);
+  if (!sesion) return null;
+
+  return db.usuarios.find((u) => u.id === sesion.usuarioId) || null;
+}
+
+// Nunca devolver la clave al frontend.
+function usuarioPublico(u) {
+  return {
+    id: u.id,
+    usuario: u.usuario,
+    nombre: u.nombre,
+    rol: u.rol,
+    seniorId: u.seniorId,
+    contactoId: u.contactoId,
+  };
+}
+
+// --- Middlewares ---
+
+function requiereAuth(req, res, next) {
   const db = loadDb();
-  res.json(db.senior);
+  const usuario = usuarioDeLaPeticion(req, db);
+  if (!usuario) {
+    return res.status(401).json({ error: "Necesitas iniciar sesión" });
+  }
+  req.usuario = usuario;
+  next();
+}
+
+function requiereRol(...roles) {
+  return (req, res, next) => {
+    if (!roles.includes(req.usuario.rol)) {
+      return res
+        .status(403)
+        .json({ error: "Tu rol no tiene permiso para esta acción" });
+    }
+    next();
+  };
+}
+
+// --- Endpoints de sesion ---
+
+app.post("/api/auth/login", (req, res) => {
+  const { usuario, clave } = req.body || {};
+  const db = loadDb();
+
+  const usuarioDb = buscarUsuarioPorNombre(db, usuario);
+  // Mismo mensaje si falla el usuario o la clave: no conviene revelar
+  // cual de los dos existe.
+  if (!usuarioDb || !verificarClave(usuarioDb, clave)) {
+    return res.status(401).json({ error: "Usuario o contraseña incorrectos" });
+  }
+
+  purgarSesionesVencidas(db);
+  const token = crearSesion(db, usuarioDb);
+  saveDb(db);
+
+  res.json({ token, usuario: usuarioPublico(usuarioDb) });
 });
 
-app.get("/api/contactos", (req, res) => {
+app.post("/api/auth/logout", requiereAuth, (req, res) => {
+  const db = loadDb();
+  const token = (req.headers.authorization || "").slice(7);
+  db.sesiones = db.sesiones.filter((s) => s.token !== token);
+  saveDb(db);
+  res.json({ ok: true });
+});
+
+// Lo llama el frontend al abrir la app para saber si la sesion sigue viva
+// y que interfaz mostrar.
+app.get("/api/auth/yo", requiereAuth, (req, res) => {
+  res.json({ usuario: usuarioPublico(req.usuario) });
+});
+
+// --- API -----------------------------------------------------------------
+
+// Los dos roles leen los mismos datos del adulto mayor; lo que cambia es
+// como se presentan (ver vista-mayor.js y vista-contacto.js) y que puede
+// hacer cada uno, definido con requiereRol mas abajo.
+
+app.get("/api/senior", requiereAuth, (req, res) => {
+  const db = loadDb();
+  const senior = seniorDeUsuario(db, req.usuario);
+  if (!senior) {
+    return res.status(403).json({ error: "No tienes acceso a esta persona" });
+  }
+  res.json(senior);
+});
+
+app.get("/api/contactos", requiereAuth, (req, res) => {
   const db = loadDb();
   res.json(db.contactos);
 });
 
-app.get("/api/alertas", (req, res) => {
+app.get("/api/alertas", requiereAuth, (req, res) => {
   const db = loadDb();
   const ordenadas = [...db.alertas].sort(
     (a, b) => new Date(b.creadoEn) - new Date(a.creadoEn)
@@ -73,42 +235,58 @@ app.get("/api/alertas", (req, res) => {
 
 // Simula que la pulsera fue escaneada (para probar el flujo de alerta
 // de punta a punta sin tener la pulsera fisica todavia).
-app.post("/api/alertas/simular-scan", (req, res) => {
-  const db = loadDb();
-  const nueva = {
-    id: db.nextAlertId,
-    tipo: "qr",
-    titulo: "Pulsera escaneada",
-    detalle: "Un desconocido escaneo el codigo QR de " + db.senior.nombre,
-    lugar: "Ubicacion aproximada por GPS del telefono que escaneo",
-    creadoEn: new Date().toISOString(),
-    estado: "pendiente",
-    whatsappEnviado: true,
-  };
-  db.alertas.push(nueva);
-  db.nextAlertId += 1;
-  db.senior.status = "alerta";
-  saveDb(db);
-  res.status(201).json(nueva);
-});
+app.post(
+  "/api/alertas/simular-scan",
+  requiereAuth,
+  requiereRol("contacto_emergencia"),
+  (req, res) => {
+    const db = loadDb();
+    const nueva = {
+      id: db.nextAlertId,
+      tipo: "qr",
+      titulo: "Pulsera escaneada",
+      detalle: "Un desconocido escaneo el codigo QR de " + db.senior.nombre,
+      lugar: "Ubicacion aproximada por GPS del telefono que escaneo",
+      creadoEn: new Date().toISOString(),
+      estado: "pendiente",
+      whatsappEnviado: true,
+    };
+    db.alertas.push(nueva);
+    db.nextAlertId += 1;
+    db.senior.status = "alerta";
+    saveDb(db);
+    res.status(201).json(nueva);
+  }
+);
 
-app.post("/api/alertas/:id/marcar-atendida", (req, res) => {
-  const db = loadDb();
-  const alerta = db.alertas.find((a) => a.id === Number(req.params.id));
-  if (!alerta) return res.status(404).json({ error: "Alerta no encontrada" });
-  alerta.estado = "atendida";
-  const hayPendientes = db.alertas.some((a) => a.estado === "pendiente");
-  db.senior.status = hayPendientes ? "alerta" : "presente";
-  saveDb(db);
-  res.json(alerta);
-});
+// Resolver una alerta es tarea del cuidador, no del adulto mayor.
+app.post(
+  "/api/alertas/:id/marcar-atendida",
+  requiereAuth,
+  requiereRol("contacto_emergencia"),
+  (req, res) => {
+    const db = loadDb();
+    const alerta = db.alertas.find((a) => a.id === Number(req.params.id));
+    if (!alerta) return res.status(404).json({ error: "Alerta no encontrada" });
+    alerta.estado = "atendida";
+    const hayPendientes = db.alertas.some((a) => a.estado === "pendiente");
+    db.senior.status = hayPendientes ? "alerta" : "presente";
+    saveDb(db);
+    res.json(alerta);
+  }
+);
 
-app.post("/api/senior/marcar-visto", (req, res) => {
-  const db = loadDb();
-  db.senior.ubicacion.actualizadoEn = new Date().toISOString();
-  saveDb(db);
-  res.json(db.senior);
-});
+app.post(
+  "/api/senior/marcar-visto",
+  requiereAuth,
+  requiereRol("contacto_emergencia"),
+  (req, res) => {
+    const db = loadDb();
+    db.senior.ubicacion.actualizadoEn = new Date().toISOString();
+    saveDb(db);
+    res.json(db.senior);
+  }
+);
 
 // --- Recordatorios -------------------------------------------------------
 // Medicamentos, citas y rutinas del adulto mayor. A diferencia de las
@@ -125,12 +303,19 @@ function ordenarRecordatorios(lista) {
   });
 }
 
-app.get("/api/recordatorios", (req, res) => {
+app.get("/api/recordatorios", requiereAuth, (req, res) => {
   const db = loadDb();
   res.json(ordenarRecordatorios(db.recordatorios || []));
 });
 
-app.post("/api/recordatorios", (req, res) => {
+// Crear y borrar recordatorios es del cuidador; marcarlos como hechos es
+// del adulto mayor (es quien se toma la pastilla). Por eso el permiso de
+// "alternar-hecho" mas abajo es distinto al de estos dos.
+app.post(
+  "/api/recordatorios",
+  requiereAuth,
+  requiereRol("contacto_emergencia"),
+  (req, res) => {
   const { titulo, detalle, hora, tipo } = req.body || {};
 
   if (!titulo || !String(titulo).trim()) {
@@ -155,15 +340,17 @@ app.post("/api/recordatorios", (req, res) => {
     creadoEn: new Date().toISOString(),
   };
 
-  db.recordatorios.push(nuevo);
-  db.nextRecordatorioId += 1;
-  saveDb(db);
-  res.status(201).json(nuevo);
-});
+    db.recordatorios.push(nuevo);
+    db.nextRecordatorioId += 1;
+    saveDb(db);
+    res.status(201).json(nuevo);
+  }
+);
 
-// Alterna entre hecho y pendiente, para que se pueda deshacer un toque
-// accidental sin tener que borrar el recordatorio.
-app.post("/api/recordatorios/:id/alternar-hecho", (req, res) => {
+// Este SI lo pueden usar los dos roles: el adulto mayor marca que ya se
+// tomo la pastilla, y el cuidador tambien puede hacerlo por el.
+// Alterna en vez de solo marcar, para poder deshacer un toque accidental.
+app.post("/api/recordatorios/:id/alternar-hecho", requiereAuth, (req, res) => {
   const db = loadDb();
   const rec = (db.recordatorios || []).find(
     (r) => r.id === Number(req.params.id)
@@ -174,17 +361,22 @@ app.post("/api/recordatorios/:id/alternar-hecho", (req, res) => {
   res.json(rec);
 });
 
-app.delete("/api/recordatorios/:id", (req, res) => {
-  const db = loadDb();
-  const id = Number(req.params.id);
-  const antes = (db.recordatorios || []).length;
-  db.recordatorios = (db.recordatorios || []).filter((r) => r.id !== id);
-  if (db.recordatorios.length === antes) {
-    return res.status(404).json({ error: "Recordatorio no encontrado" });
+app.delete(
+  "/api/recordatorios/:id",
+  requiereAuth,
+  requiereRol("contacto_emergencia"),
+  (req, res) => {
+    const db = loadDb();
+    const id = Number(req.params.id);
+    const antes = (db.recordatorios || []).length;
+    db.recordatorios = (db.recordatorios || []).filter((r) => r.id !== id);
+    if (db.recordatorios.length === antes) {
+      return res.status(404).json({ error: "Recordatorio no encontrado" });
+    }
+    saveDb(db);
+    res.json({ ok: true });
   }
-  saveDb(db);
-  res.json({ ok: true });
-});
+);
 
 // --- Zona segura (geocerca) ----------------------------------------------
 //
@@ -344,6 +536,12 @@ function evaluarUbicacion(db, { lat, lng, precision }) {
     alerta,
   };
 }
+
+// OJO: los cuatro endpoints que siguen son los unicos SIN autenticacion.
+// Es a proposito, para que el simulador funcione en demos sin tener que
+// iniciar sesion. Antes de conectar datos reales hay que protegerlos: el
+// de ubicacion deberia exigir la sesion del propio adulto mayor, y los de
+// simulador deberian desaparecer.
 
 // Aqui reportaria el telefono del adulto mayor (hoy lo usa el simulador).
 app.post("/api/ubicacion", (req, res) => {
