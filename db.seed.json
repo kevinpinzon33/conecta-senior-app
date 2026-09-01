@@ -1,5 +1,5 @@
 {
-  "_comentario": "Datos de ejemplo INVENTADOS. Las claves van en texto plano solo porque son usuarios de prueba; al conectar la base de datos real hay que guardarlas hasheadas (ver seccion de autenticacion en server.js).",
+  "_comentario": "Datos de ejemplo INVENTADOS. Los nombres de campo siguen los del backend real (proyecto conecta-senior): contactos usan relacion/telefonoPrincipal/prioridad y medicamentos usa dosis/frecuencia/horario/viaAdministracion, en camelCase por ser JSON. Asi el mapeo a las tablas MySQL es 1:1. Las claves van en texto plano solo porque son usuarios de prueba.",
   "usuarios": [
     {
       "id": 1,
@@ -32,13 +32,13 @@
     "status": "presente",
     "ubicacion": {
       "direccion": "Av. Reforma 214, Col. Roma Norte",
-      "lat": 19.4180,
-      "lng": -99.1620,
+      "lat": 19.418,
+      "lng": -99.162,
       "actualizadoEn": "2026-08-03T15:12:00.000Z"
     },
     "zonaSegura": {
-      "lat": 19.4180,
-      "lng": -99.1620,
+      "lat": 19.418,
+      "lng": -99.162,
       "radioM": 300
     },
     "seguimiento": {
@@ -49,9 +49,27 @@
     }
   },
   "contactos": [
-    { "id": 1, "nombre": "Daniela Vidal", "rol": "Hija - Contacto principal", "telefono": "+52 55 1234 5678" },
-    { "id": 2, "nombre": "Marco Vidal", "rol": "Hijo", "telefono": "+52 55 8765 4321" },
-    { "id": 3, "nombre": "Elena Torres", "rol": "Cuidadora", "telefono": "+52 55 2222 3333" }
+    {
+      "id": 1,
+      "nombre": "Daniela Vidal",
+      "relacion": "Hija",
+      "telefonoPrincipal": "+52 55 1234 5678",
+      "prioridad": 1
+    },
+    {
+      "id": 2,
+      "nombre": "Marco Vidal",
+      "relacion": "Hijo",
+      "telefonoPrincipal": "+52 55 8765 4321",
+      "prioridad": 2
+    },
+    {
+      "id": 3,
+      "nombre": "Elena Torres",
+      "relacion": "Cuidadora",
+      "telefonoPrincipal": "+52 55 2222 3333",
+      "prioridad": 3
+    }
   ],
   "alertas": [
     {
@@ -94,7 +112,8 @@
       "detalle": "Losartan 50mg",
       "hora": "18:00",
       "hecho": false,
-      "creadoEn": "2026-08-03T12:00:00.000Z"
+      "creadoEn": "2026-08-03T12:00:00.000Z",
+      "fecha": ""
     },
     {
       "id": 2,
@@ -103,8 +122,34 @@
       "detalle": "Clinica Roma, consultorio 304",
       "hora": "10:00",
       "hecho": false,
-      "creadoEn": "2026-08-04T12:00:00.000Z"
+      "creadoEn": "2026-08-04T12:00:00.000Z",
+      "fecha": "2026-09-03"
     }
   ],
-  "nextRecordatorioId": 3
+  "nextRecordatorioId": 3,
+  "medicamentos": [
+    {
+      "id": 1,
+      "nombre": "Losartan",
+      "dosis": "50 mg",
+      "frecuencia": "Una vez al dia",
+      "horario": "08:00",
+      "viaAdministracion": "Oral",
+      "notas": "Tomar con el desayuno",
+      "activo": true,
+      "creadoEn": "2026-08-03T12:00:00.000Z"
+    },
+    {
+      "id": 2,
+      "nombre": "Metformina",
+      "dosis": "500 mg",
+      "frecuencia": "Cada 12 horas",
+      "horario": "07:00 y 19:00",
+      "viaAdministracion": "Oral",
+      "notas": "",
+      "activo": true,
+      "creadoEn": "2026-08-03T12:00:00.000Z"
+    }
+  ],
+  "nextMedicamentoId": 3
 }

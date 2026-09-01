@@ -684,3 +684,53 @@ body.en-login #screen { display: flex; align-items: center; }
 .vista-mayor .profile-head p { font-size: 14.5px; }
 .vista-mayor .qr-card .title { font-size: 15px; }
 .vista-mayor .qr-card .sub { font-size: 13px; }
+
+/* ======================================================================
+   MEDICAMENTOS
+   El tratamiento del adulto mayor. Se distingue de los recordatorios
+   con el icono de frasco y un color propio, para que en el panel del
+   cuidador no se confunda "lo que toma" con "lo que hay que hacer hoy".
+   ====================================================================== */
+
+.med-icono { background: rgba(232,163,61,0.12); color: var(--cuidado); }
+
+.med-lista { display: grid; gap: 10px; }
+.med-card {
+  display: flex; align-items: flex-start; gap: 12px;
+  background: var(--panel); border: 1px solid var(--linea);
+  border-radius: 16px; padding: 14px;
+}
+.med-card.suspendido { opacity: 0.6; }
+.med-body { flex: 1; min-width: 0; }
+.med-card p { margin: 0; }
+.med-card .title { font-size: 14px; font-weight: 600; color: var(--texto); }
+.med-card .sub {
+  font-size: 12.5px; color: var(--texto-muted); margin-top: 3px; line-height: 1.4;
+}
+.med-pausa {
+  font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.04em; color: var(--texto-muted);
+  background: var(--panel-alt); padding: 2px 7px; border-radius: 999px;
+}
+.med-acciones { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
+.med-acciones button {
+  background: none; border: none; cursor: pointer;
+  color: var(--texto-muted); padding: 6px; display: flex;
+}
+.med-acciones button:active { color: var(--noche); }
+
+/* Versión del adulto mayor: solo lectura y más grande */
+.med-mayor-lista { display: grid; gap: 10px; }
+.med-mayor {
+  display: flex; align-items: center; gap: 14px;
+  background: var(--panel); border: 1px solid var(--linea);
+  border-radius: 18px; padding: 16px;
+}
+.med-mayor .icon-badge { padding: 11px; }
+.med-mayor .icon-badge svg { width: 20px; height: 20px; }
+.med-mayor-body { flex: 1; min-width: 0; }
+.med-mayor p { margin: 0; }
+.med-mayor .title { font-size: 17px; font-weight: 600; color: var(--texto); }
+.med-mayor .sub {
+  font-size: 14px; color: var(--texto-muted); margin-top: 4px; line-height: 1.35;
+}

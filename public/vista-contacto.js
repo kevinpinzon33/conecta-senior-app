@@ -12,7 +12,7 @@ function renderListaRecordatorios() {
   const filas = state.recordatorios
     .map((r) => {
       const tipo = TIPOS_RECORDATORIO[r.tipo] || TIPOS_RECORDATORIO.otro;
-      const sub = [r.detalle, fmtHora(r.hora)].filter(Boolean).join(" · ");
+      const sub = [r.detalle, fmtFecha(r.fecha), fmtHora(r.hora)].filter(Boolean).join(" · ");
       return `
       <div class="reminder-card ${r.hecho ? "hecho" : ""}">
         <button class="rec-main" data-toggle="${r.id}" aria-pressed="${r.hecho}">
@@ -73,6 +73,9 @@ function abrirFormRecordatorio() {
       <label for="recDetalle">Detalle <span>(opcional)</span></label>
       <input id="recDetalle" type="text" maxlength="120" placeholder="Losartán 50mg" />
 
+      <label for="recFecha">Fecha <span>(opcional, para citas médicas)</span></label>
+      <input id="recFecha" type="date" />
+
       <label for="recHora">Hora <span>(opcional)</span></label>
       <input id="recHora" type="time" />
 
@@ -101,6 +104,7 @@ function abrirFormRecordatorio() {
   const inputTitulo = overlay.querySelector("#recTitulo");
   const inputDetalle = overlay.querySelector("#recDetalle");
   const inputHora = overlay.querySelector("#recHora");
+  const inputFecha = overlay.querySelector("#recFecha");
   const errorEl = overlay.querySelector("#recError");
   const btnGuardar = overlay.querySelector("#recGuardar");
 
@@ -145,6 +149,7 @@ function abrirFormRecordatorio() {
           titulo,
           detalle: inputDetalle.value.trim(),
           hora: inputHora.value,
+          fecha: inputFecha.value,
           tipo: tipoElegido,
         }),
       });
@@ -235,7 +240,7 @@ function renderInicio() {
   };
   document.getElementById("btnLlamar").onclick = () => {
     const principal = contactoPrincipal();
-    window.location.href = telHref(principal?.telefono);
+    window.location.href = telHref(principal?.telefonoPrincipal);
   };
 
   conectarEventosRecordatorios();
@@ -301,9 +306,9 @@ function renderPerfil() {
       <div class="contact-row">
         <div class="left">
           <div class="contact-avatar">${ICONS.persona}</div>
-          <div><p class="title">${esc(c.nombre)}</p><p class="sub">${esc(c.rol)}</p></div>
+          <div><p class="title">${esc(c.nombre)}</p><p class="sub">${esc(c.relacion)}</p></div>
         </div>
-        <a href="${telHref(c.telefono)}" style="color:var(--noche);display:flex">${ICONS.phone}</a>
+        <a href="${telHref(c.telefonoPrincipal)}" style="color:var(--noche);display:flex">${ICONS.phone}</a>
       </div>`
     )
     .join("");
@@ -337,8 +342,197 @@ function renderPerfil() {
     </div>
 
     <div class="section">
+      <div class="section-head">
+        <p class="section-title">Medicamentos</p>
+        <button class="add-btn" id="btnAgregarMed">${ICONS.mas} Agregar</button>
+      </div>
+      ${renderListaMedicamentos()}
+    </div>
+
+    <div class="section">
       <p class="section-title">Contactos de emergencia</p>
       <div class="contact-list">${contactosHtml}</div>
     </div>
   `;
+
+  conectarEventosMedicamentos();
+}
+
+// ── Medicamentos ──────────────────────────────────────────────────
+// El tratamiento, separado de los recordatorios a proposito: un
+// recordatorio se marca como hecho y desaparece del dia; un
+// medicamento sigue ahi mientras el medico lo mantenga.
+//
+// Suspender NO borra. El historial de lo que tomo alguien es
+// informacion clinica y hace falta para saber que ya se probo.
+
+function renderListaMedicamentos() {
+  if (!state.medicamentos.length) {
+    return `<p class="empty-hint">Todavía no hay medicamentos registrados.</p>`;
+  }
+
+  const filas = state.medicamentos
+    .map((m) => {
+      const detalle = [m.dosis, m.frecuencia, m.horario].filter(Boolean).join(" · ");
+      return `
+      <div class="med-card ${m.activo ? "" : "suspendido"}">
+        <div class="icon-badge med-icono">${ICONS.frasco}</div>
+        <div class="med-body">
+          <p class="title">${esc(m.nombre)}${
+            m.activo ? "" : ' <span class="med-pausa">Suspendido</span>'
+          }</p>
+          ${detalle ? `<p class="sub">${esc(detalle)}</p>` : ""}
+          ${m.viaAdministracion ? `<p class="sub">Vía: ${esc(m.viaAdministracion)}</p>` : ""}
+          ${m.notas ? `<p class="sub">${esc(m.notas)}</p>` : ""}
+        </div>
+        <div class="med-acciones">
+          <button data-med-editar="${m.id}" aria-label="Editar medicamento">${ICONS.lapiz}</button>
+          <button data-med-activo="${m.id}" aria-label="${
+            m.activo ? "Suspender" : "Retomar"
+          } medicamento">${m.activo ? ICONS.check : ICONS.otro}</button>
+          <button data-med-borrar="${m.id}" aria-label="Eliminar medicamento">${ICONS.basura}</button>
+        </div>
+      </div>`;
+    })
+    .join("");
+
+  return `<div class="med-lista">${filas}</div>`;
+}
+
+function conectarEventosMedicamentos() {
+  const btn = document.getElementById("btnAgregarMed");
+  if (btn) btn.onclick = () => abrirFormMedicamento(null);
+
+  screenEl.querySelectorAll("[data-med-editar]").forEach((b) => {
+    b.onclick = () => {
+      const med = state.medicamentos.find(
+        (m) => m.id === Number(b.dataset.medEditar)
+      );
+      if (med) abrirFormMedicamento(med);
+    };
+  });
+
+  screenEl.querySelectorAll("[data-med-activo]").forEach((b) => {
+    b.onclick = async () => {
+      const med = state.medicamentos.find(
+        (m) => m.id === Number(b.dataset.medActivo)
+      );
+      if (!med) return;
+      await api(`/medicamentos/${med.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ activo: !med.activo }),
+      });
+      refreshAll();
+    };
+  });
+
+  screenEl.querySelectorAll("[data-med-borrar]").forEach((b) => {
+    b.onclick = async () => {
+      await api(`/medicamentos/${b.dataset.medBorrar}`, { method: "DELETE" });
+      refreshAll();
+    };
+  });
+}
+
+// Sirve para crear y para editar: si llega `med`, el formulario viene
+// relleno y guarda con PUT. Dos formularios separados serian el mismo
+// codigo duplicado, y con el tiempo se acabarian pareciendo cada vez menos.
+function abrirFormMedicamento(med) {
+  const editando = !!med;
+
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = `
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="medTitle">
+      <h2 id="medTitle">${editando ? "Editar medicamento" : "Nuevo medicamento"}</h2>
+
+      <label for="medNombre">Medicamento</label>
+      <input id="medNombre" type="text" maxlength="150" placeholder="Losartán"
+             value="${esc(med ? med.nombre : "")}" />
+
+      <label for="medDosis">Dosis <span>(opcional)</span></label>
+      <input id="medDosis" type="text" maxlength="100" placeholder="50 mg"
+             value="${esc(med ? med.dosis : "")}" />
+
+      <label for="medFrecuencia">Frecuencia <span>(opcional)</span></label>
+      <input id="medFrecuencia" type="text" maxlength="100" placeholder="Una vez al día"
+             value="${esc(med ? med.frecuencia : "")}" />
+
+      <label for="medHorario">Horario <span>(opcional)</span></label>
+      <input id="medHorario" type="text" maxlength="100" placeholder="8:00 am"
+             value="${esc(med ? med.horario : "")}" />
+
+      <label for="medVia">Vía de administración <span>(opcional)</span></label>
+      <input id="medVia" type="text" maxlength="100" placeholder="Oral"
+             value="${esc(med ? med.viaAdministracion : "")}" />
+
+      <label for="medNotas">Notas <span>(opcional)</span></label>
+      <input id="medNotas" type="text" maxlength="300" placeholder="Tomar con el desayuno"
+             value="${esc(med ? med.notas : "")}" />
+
+      <p class="modal-error" id="medError" hidden></p>
+
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="medCancelar">Cancelar</button>
+        <button class="btn btn-primary" id="medGuardar">Guardar</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const errorEl = overlay.querySelector("#medError");
+  const btnGuardar = overlay.querySelector("#medGuardar");
+  const val = (id) => overlay.querySelector(id).value.trim();
+
+  const cerrar = () => {
+    document.removeEventListener("keydown", alPresionarTecla);
+    overlay.remove();
+  };
+  function alPresionarTecla(e) {
+    if (e.key === "Escape") cerrar();
+  }
+  document.addEventListener("keydown", alPresionarTecla);
+  overlay.onclick = (e) => {
+    if (e.target === overlay) cerrar();
+  };
+
+  const guardar = async () => {
+    const nombre = val("#medNombre");
+    if (!nombre) {
+      errorEl.textContent = "Escribe el nombre del medicamento.";
+      errorEl.hidden = false;
+      overlay.querySelector("#medNombre").focus();
+      return;
+    }
+
+    btnGuardar.disabled = true;
+    const cuerpo = {
+      nombre,
+      dosis: val("#medDosis"),
+      frecuencia: val("#medFrecuencia"),
+      horario: val("#medHorario"),
+      viaAdministracion: val("#medVia"),
+      notas: val("#medNotas"),
+    };
+
+    try {
+      await api(editando ? `/medicamentos/${med.id}` : "/medicamentos", {
+        method: editando ? "PUT" : "POST",
+        body: JSON.stringify(cuerpo),
+      });
+      cerrar();
+      refreshAll();
+    } catch (err) {
+      errorEl.textContent = err.message;
+      errorEl.hidden = false;
+      btnGuardar.disabled = false;
+    }
+  };
+
+  btnGuardar.onclick = guardar;
+  overlay.querySelector("#medCancelar").onclick = cerrar;
+  overlay.querySelector("#medNombre").onkeydown = (e) => {
+    if (e.key === "Enter") guardar();
+  };
+  overlay.querySelector("#medNombre").focus();
 }

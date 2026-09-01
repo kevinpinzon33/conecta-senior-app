@@ -28,7 +28,7 @@ function renderMayorRecordatorios() {
   const filas = state.recordatorios
     .map((r) => {
       const tipo = TIPOS_RECORDATORIO[r.tipo] || TIPOS_RECORDATORIO.otro;
-      const sub = [r.detalle, fmtHora(r.hora)].filter(Boolean).join(" · ");
+      const sub = [r.detalle, fmtFecha(r.fecha), fmtHora(r.hora)].filter(Boolean).join(" · ");
       return `
       <button class="rec-mayor ${r.hecho ? "hecho" : ""}"
               data-toggle="${r.id}" aria-pressed="${r.hecho}">
@@ -89,7 +89,7 @@ function renderMayorHoy() {
 
     ${
       principal
-        ? `<a class="btn-llamar-mayor" href="${telHref(principal.telefono)}">
+        ? `<a class="btn-llamar-mayor" href="${telHref(principal.telefonoPrincipal)}">
              ${ICONS.phone}
              <span>Llamar a ${esc(primerNombre(principal.nombre))}</span>
            </a>`
@@ -149,11 +149,11 @@ function renderMayorInfo() {
   const contactosHtml = state.contactos
     .map(
       (c) => `
-      <a class="contacto-mayor" href="${telHref(c.telefono)}">
+      <a class="contacto-mayor" href="${telHref(c.telefonoPrincipal)}">
         <div class="contact-avatar">${ICONS.persona}</div>
         <div class="contacto-mayor-body">
           <p class="title">${esc(c.nombre)}</p>
-          <p class="sub">${esc(c.rol)}</p>
+          <p class="sub">${esc(c.relacion)}</p>
         </div>
         <span class="contacto-mayor-llamar">${ICONS.phone}</span>
       </a>`
@@ -189,11 +189,46 @@ function renderMayorInfo() {
     </div>
 
     <div class="section">
+      <p class="section-title">Mis medicamentos</p>
+      ${renderMedicamentosMayor()}
+    </div>
+
+    <div class="section">
       <p class="section-title">Mis contactos</p>
       <p class="ayuda-mayor">Toca un nombre para llamar.</p>
       <div class="contacto-mayor-lista">${contactosHtml}</div>
     </div>
   `;
+}
+
+// Solo lectura: quien decide el tratamiento es el medico, y quien lo
+// administra en la app es el cuidador. Aqui la persona ve QUE toma y
+// CUANDO, que es lo que necesita para no equivocarse.
+//
+// Los suspendidos no se muestran: enseñarle a alguien una pastilla que
+// ya no debe tomar es justo la clase de confusion que hay que evitar.
+function renderMedicamentosMayor() {
+  const activos = state.medicamentos.filter((m) => m.activo);
+  if (!activos.length) {
+    return `<p class="empty-hint">No tienes medicamentos registrados.</p>`;
+  }
+
+  const filas = activos
+    .map((m) => {
+      const detalle = [m.dosis, m.frecuencia, m.horario].filter(Boolean).join(" · ");
+      return `
+      <div class="med-mayor">
+        <div class="icon-badge med-icono">${ICONS.frasco}</div>
+        <div class="med-mayor-body">
+          <p class="title">${esc(m.nombre)}</p>
+          ${detalle ? `<p class="sub">${esc(detalle)}</p>` : ""}
+          ${m.notas ? `<p class="sub">${esc(m.notas)}</p>` : ""}
+        </div>
+      </div>`;
+    })
+    .join("");
+
+  return `<div class="med-mayor-lista">${filas}</div>`;
 }
 
 function conectarToggleRecordatoriosMayor() {

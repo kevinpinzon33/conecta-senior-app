@@ -71,9 +71,18 @@ misma pantalla de login, así que no hay que memorizarlos):
 - **Inicio**: ubicación simulada de Rosa Elena, estado, radio de zona
   segura, botón "Llamar" (marca al contacto principal) y "Marcar visto".
 - **Recordatorios** (abajo en Inicio): toca **"+ Agregar"** para crear
-  uno (medicamento, cita u otro, con hora opcional). Tócalo para
-  marcarlo como hecho — se tacha y se va al final; tócalo otra vez
-  para deshacerlo. El ícono de basura lo elimina.
+  uno (medicamento, cita u otro, con **fecha** y hora opcionales — la
+  fecha es la que hace útil una cita médica). Tócalo para marcarlo como
+  hecho — se tacha y se va al final; tócalo otra vez para deshacerlo.
+  El ícono de basura lo elimina.
+- **Medicamentos** (en Perfil): el tratamiento del adulto mayor, con
+  dosis, frecuencia, horario y vía. Es **distinto** de un recordatorio:
+  el recordatorio se marca como hecho y desaparece del día; el
+  medicamento sigue ahí mientras el médico lo mantenga. Se puede
+  **suspender** sin borrarlo (queda en gris), porque el historial de lo
+  que tomó alguien es información clínica.
+  El adulto mayor los ve en **"Mi info"**, solo de lectura y con letra
+  grande: quien administra el tratamiento es el cuidador.
 - **Alertas**: botón **"Simular escaneo"** — crea una alerta real,
   nueva, con hora actual, guardada en `db.json`. Puedes marcarla como
   atendida y el estado del adulto mayor vuelve a "presente".

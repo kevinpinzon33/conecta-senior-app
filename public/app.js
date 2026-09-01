@@ -88,16 +88,19 @@ function render() {
 async function refreshAll() {
   if (!state.usuario) return;
 
-  const [senior, alertas, contactos, recordatorios] = await Promise.all([
-    api("/senior"),
-    api("/alertas"),
-    api("/contactos"),
-    api("/recordatorios"),
-  ]);
+  const [senior, alertas, contactos, recordatorios, medicamentos] =
+    await Promise.all([
+      api("/senior"),
+      api("/alertas"),
+      api("/contactos"),
+      api("/recordatorios"),
+      api("/medicamentos"),
+    ]);
   state.senior = senior;
   state.alertas = alertas;
   state.contactos = contactos;
   state.recordatorios = recordatorios;
+  state.medicamentos = medicamentos;
   render();
 }
 

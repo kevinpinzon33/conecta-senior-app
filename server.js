@@ -27,6 +27,8 @@ function normalizarDb(db) {
   if (!db.recordatorios) db.recordatorios = [];
   if (!db.nextRecordatorioId) db.nextRecordatorioId = 1;
   if (!db.usuarios) db.usuarios = [];
+  if (!db.medicamentos) db.medicamentos = [];
+  if (!db.nextMedicamentoId) db.nextMedicamentoId = 1;
   if (!db.sesiones) db.sesiones = [];
   if (!db.senior.zonaSegura) {
     db.senior.zonaSegura = {
@@ -296,6 +298,15 @@ app.post(
 const TIPOS_RECORDATORIO = ["medicamento", "cita", "otro"];
 
 // Ordena por hora del dia; los ya marcados como hechos se van al final.
+// AAAA-MM-DD y que la fecha exista de verdad: "2026-02-31" cumple el
+// patron pero no es un dia real, y JavaScript la corre al 3 de marzo sin
+// avisar. Una cita medica en un dia equivocado es peor que no tenerla.
+function esFechaValida(texto) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(texto)) return false;
+  const d = new Date(texto + "T00:00:00Z");
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === texto;
+}
+
 function ordenarRecordatorios(lista) {
   return [...lista].sort((a, b) => {
     if (a.hecho !== b.hecho) return a.hecho ? 1 : -1;
@@ -316,7 +327,7 @@ app.post(
   requiereAuth,
   requiereRol("contacto_emergencia"),
   (req, res) => {
-  const { titulo, detalle, hora, tipo } = req.body || {};
+  const { titulo, detalle, hora, fecha, tipo } = req.body || {};
 
   if (!titulo || !String(titulo).trim()) {
     return res.status(400).json({ error: "El titulo es obligatorio" });
@@ -324,6 +335,11 @@ app.post(
   // La hora es opcional, pero si viene tiene que ser HH:MM (24h).
   if (hora && !/^([01]\d|2[0-3]):[0-5]\d$/.test(hora)) {
     return res.status(400).json({ error: "La hora debe tener formato HH:MM" });
+  }
+  // La fecha tambien es opcional, pero una cita medica sin dia no sirve
+  // de nada: si viene, tiene que ser una fecha real en formato AAAA-MM-DD.
+  if (fecha && !esFechaValida(fecha)) {
+    return res.status(400).json({ error: "La fecha debe tener formato AAAA-MM-DD" });
   }
 
   const db = loadDb();
@@ -336,6 +352,7 @@ app.post(
     titulo: String(titulo).trim(),
     detalle: detalle ? String(detalle).trim() : "",
     hora: hora || "",
+    fecha: fecha || "",
     hecho: false,
     creadoEn: new Date().toISOString(),
   };
@@ -372,6 +389,119 @@ app.delete(
     db.recordatorios = (db.recordatorios || []).filter((r) => r.id !== id);
     if (db.recordatorios.length === antes) {
       return res.status(404).json({ error: "Recordatorio no encontrado" });
+    }
+    saveDb(db);
+    res.json({ ok: true });
+  }
+);
+
+// --- Medicamentos --------------------------------------------------------
+//
+// El tratamiento del adulto mayor: que toma, cuanta dosis y cada cuanto.
+// Los campos son los mismos que la tabla `medicamentos` del backend real
+// (nombre, dosis, frecuencia, horario, via_administracion, activo), para
+// que conectarlo despues sea un mapeo directo y no una traduccion.
+//
+// ── POR QUE ESTA SEPARADO DE LOS RECORDATORIOS ─────────────────────────
+// Son dos cosas distintas y mezclarlas se paga caro:
+//   · Un MEDICAMENTO es el tratamiento. Vive mientras el medico lo
+//     mantenga y lo administra el cuidador.
+//   · Un RECORDATORIO es una tarea de hoy que se marca como hecha.
+// Si fueran lo mismo, marcar "ya me la tome" borraria el medicamento de
+// la lista de tratamiento, que es justo lo que no debe pasar.
+//
+// Un medicamento no se borra al suspenderlo: se marca `activo: false`.
+// El historial de lo que tomo alguien es informacion clinica.
+
+function limpiarTexto(valor, maximo) {
+  return String(valor == null ? "" : valor).trim().slice(0, maximo);
+}
+
+app.get("/api/medicamentos", requiereAuth, (req, res) => {
+  const db = loadDb();
+  const lista = [...(db.medicamentos || [])].sort((a, b) => {
+    // Los suspendidos al final; el resto por nombre.
+    if (!!a.activo !== !!b.activo) return a.activo ? -1 : 1;
+    return String(a.nombre).localeCompare(String(b.nombre), "es");
+  });
+  res.json(lista);
+});
+
+app.post(
+  "/api/medicamentos",
+  requiereAuth,
+  requiereRol("contacto_emergencia"),
+  (req, res) => {
+    const { nombre, dosis, frecuencia, horario, viaAdministracion, notas } =
+      req.body || {};
+
+    if (!nombre || !String(nombre).trim()) {
+      return res.status(400).json({ error: "El nombre del medicamento es obligatorio" });
+    }
+
+    const db = loadDb();
+    const nuevo = {
+      id: db.nextMedicamentoId,
+      nombre: limpiarTexto(nombre, 150),
+      dosis: limpiarTexto(dosis, 100),
+      frecuencia: limpiarTexto(frecuencia, 100),
+      horario: limpiarTexto(horario, 100),
+      viaAdministracion: limpiarTexto(viaAdministracion, 100),
+      notas: limpiarTexto(notas, 300),
+      activo: true,
+      creadoEn: new Date().toISOString(),
+    };
+
+    db.medicamentos.push(nuevo);
+    db.nextMedicamentoId += 1;
+    saveDb(db);
+    res.status(201).json(nuevo);
+  }
+);
+
+app.put(
+  "/api/medicamentos/:id",
+  requiereAuth,
+  requiereRol("contacto_emergencia"),
+  (req, res) => {
+    const db = loadDb();
+    const med = (db.medicamentos || []).find(
+      (m) => m.id === Number(req.params.id)
+    );
+    if (!med) return res.status(404).json({ error: "Medicamento no encontrado" });
+
+    const c = req.body || {};
+    if (c.nombre !== undefined) {
+      if (!String(c.nombre).trim()) {
+        return res.status(400).json({ error: "El nombre del medicamento es obligatorio" });
+      }
+      med.nombre = limpiarTexto(c.nombre, 150);
+    }
+    if (c.dosis !== undefined) med.dosis = limpiarTexto(c.dosis, 100);
+    if (c.frecuencia !== undefined) med.frecuencia = limpiarTexto(c.frecuencia, 100);
+    if (c.horario !== undefined) med.horario = limpiarTexto(c.horario, 100);
+    if (c.viaAdministracion !== undefined)
+      med.viaAdministracion = limpiarTexto(c.viaAdministracion, 100);
+    if (c.notas !== undefined) med.notas = limpiarTexto(c.notas, 300);
+    // Suspender o retomar un tratamiento.
+    if (c.activo !== undefined) med.activo = !!c.activo;
+
+    saveDb(db);
+    res.json(med);
+  }
+);
+
+app.delete(
+  "/api/medicamentos/:id",
+  requiereAuth,
+  requiereRol("contacto_emergencia"),
+  (req, res) => {
+    const db = loadDb();
+    const id = Number(req.params.id);
+    const antes = (db.medicamentos || []).length;
+    db.medicamentos = (db.medicamentos || []).filter((m) => m.id !== id);
+    if (db.medicamentos.length === antes) {
+      return res.status(404).json({ error: "Medicamento no encontrado" });
     }
     saveDb(db);
     res.json({ ok: true });

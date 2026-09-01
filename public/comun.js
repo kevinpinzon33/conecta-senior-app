@@ -23,6 +23,8 @@ const ICONS = {
   basura: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`,
   salir: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>`,
   escudo: `<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg>`,
+  frasco: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3h6v3l3 5v10a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V11l3-5z"/><line x1="6" y1="14" x2="18" y2="14"/></svg>`,
+  lapiz: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>`,
   persona: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="7" r="4"/></svg>`,
 };
 
@@ -50,6 +52,7 @@ let state = {
   alertas: [],
   contactos: [],
   recordatorios: [],
+  medicamentos: [],
   tab: null,
 };
 
@@ -95,6 +98,7 @@ function olvidarSesion() {
   state.alertas = [];
   state.contactos = [];
   state.recordatorios = [];
+  state.medicamentos = [];
   state.tab = null;
   localStorage.removeItem(CLAVE_TOKEN);
 }
@@ -124,6 +128,19 @@ function fmtHora(hora) {
   return `${h12}:${String(m).padStart(2, "0")} ${sufijo}`;
 }
 
+// "2026-09-03" -> "mié 3 de sep". Una cita medica sin dia no sirve de
+// nada, y "2026-09-03" obliga a la persona a descifrar el formato.
+function fmtFecha(fecha) {
+  if (!fecha) return "";
+  const d = new Date(fecha + "T00:00:00");
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("es-CO", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  });
+}
+
 function timeAgo(iso) {
   const diffMs = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diffMs / 60000);
@@ -148,10 +165,13 @@ function primerNombre(nombre) {
 }
 
 function contactoPrincipal() {
+  // El backend real ordena los contactos por `prioridad` (1 = primero al
+  // que se avisa). Se usa el mismo criterio en vez de buscar la palabra
+  // "principal" dentro del texto de la relacion, que era fragil.
   return (
-    state.contactos.find((c) => c.rol.toLowerCase().includes("principal")) ||
-    state.contactos[0] ||
-    null
+    [...state.contactos].sort(
+      (a, b) => (a.prioridad || 99) - (b.prioridad || 99)
+    )[0] || null
   );
 }
 
