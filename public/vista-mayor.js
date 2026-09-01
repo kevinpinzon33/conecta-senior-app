@@ -87,6 +87,8 @@ function renderMayorHoy() {
       </p>
     </div>
 
+    ${renderCompartirUbicacion()}
+
     ${
       principal
         ? `<a class="btn-llamar-mayor" href="${telHref(principal.telefonoPrincipal)}">
@@ -108,6 +110,73 @@ function renderMayorHoy() {
   `;
 
   conectarToggleRecordatoriosMayor();
+  conectarCompartirUbicacion();
+}
+
+// ── Compartir mi ubicación ────────────────────────────────────────
+// Con esto el teléfono de la persona manda su GPS y su familia la ve en
+// el mapa. Se explica en primera persona y sin tecnicismos: quien lo usa
+// no tiene por qué saber qué es una geocerca.
+
+function renderCompartirUbicacion() {
+  const e = Ubicacion.estado;
+  const activo = e === "buscando" || e === "compartiendo";
+
+  const titulo = {
+    inactivo: "Compartir mi ubicación",
+    buscando: "Buscando tu ubicación…",
+    compartiendo: "Compartiendo tu ubicación",
+    error: "No se pudo compartir",
+  }[e];
+
+  const sub = {
+    inactivo: "Tu familia podrá ver dónde estás.",
+    buscando: "Espera unos segundos con la pantalla encendida.",
+    compartiendo: "Tu familia puede verte en el mapa.",
+    error: Ubicacion.detalle,
+  }[e];
+
+  const lec = Ubicacion.ultimaLectura;
+  const pie =
+    e === "compartiendo" && lec
+      ? `<p class="compartir-pie">${
+          lec.aceptada
+            ? `Precisión de ${Math.round(lec.precision)} m · enviada ${timeAgo(lec.en)}`
+            : esc(lec.motivo)
+        }</p>`
+      : "";
+
+  return `
+    <div class="compartir ${e}">
+      <div class="compartir-cab">
+        <div class="compartir-icono">${ICONS.senal}</div>
+        <div>
+          <p class="compartir-titulo">${titulo}</p>
+          <p class="compartir-sub">${esc(sub || "")}</p>
+        </div>
+      </div>
+      <button class="compartir-btn ${activo ? "activo" : ""}" id="btnCompartir">
+        ${activo ? "Dejar de compartir" : "Compartir mi ubicación"}
+      </button>
+      ${pie}
+      ${
+        activo
+          ? `<p class="compartir-aviso">Mantén esta pantalla abierta: al bloquear el teléfono se deja de enviar.</p>`
+          : ""
+      }
+    </div>`;
+}
+
+function conectarCompartirUbicacion() {
+  const btn = document.getElementById("btnCompartir");
+  if (!btn) return;
+
+  // Sin async ni await aquí: iOS exige que getCurrentPosition salga del
+  // gesto del usuario de forma síncrona, o deniega sin preguntar.
+  btn.onclick = () => {
+    if (Ubicacion.activo) detenerCompartir();
+    else iniciarCompartir();
+  };
 }
 
 function renderMayorAlertas() {

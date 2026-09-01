@@ -116,6 +116,16 @@ async function iniciarSesionEnLaApp() {
   renderTopbar();
   screenEl.innerHTML = '<div class="loading">Cargando…</div>';
 
+  // El compartir de ubicacion cambia de estado por su cuenta (permiso
+  // concedido, primer fix, error del GPS). Sin esto habria que esperar
+  // al refresco de 15 s para enterarse.
+  if (typeof Ubicacion !== "undefined") {
+    Ubicacion.alCambiar = () => {
+      if (state.tab === "hoy") render();
+    };
+    if (esAdultoMayor()) reanudarSiProcede();
+  }
+
   await refreshAll();
 
   clearInterval(temporizadorRefresco);
@@ -131,6 +141,9 @@ async function cerrarSesion() {
   } catch (_) {
     // Si el servidor ya no reconoce la sesion da igual: igual salimos.
   }
+  // Dejar de compartir al salir: la ubicacion es de quien inicio sesion,
+  // no del telefono.
+  if (typeof Ubicacion !== "undefined" && Ubicacion.activo) detenerCompartir();
   olvidarSesion();
   document.body.classList.remove("vista-mayor");
   mostrarLogin();

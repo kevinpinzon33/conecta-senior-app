@@ -89,6 +89,25 @@ misma pantalla de login, así que no hay que memorizarlos):
 - **Perfil**: info médica y contactos de emergencia (los botones de
   llamada abren el marcador del iPhone).
 
+### Probar con dos teléfonos (ubicación en vivo)
+
+1. En el teléfono del **adulto mayor**, entra como `rosa` / `rosa123` y
+   en la pantalla **Hoy** toca **"Compartir mi ubicación"**. Acepta el
+   permiso que pide el navegador.
+2. En el otro teléfono, entra como `daniela` / `daniela123`. En
+   **Inicio** verás **EN VIVO**, la posición real, la precisión del GPS
+   y un enlace para abrirla en el mapa.
+
+> **Solo funciona con la app abierta y en pantalla.** Al bloquear el
+> teléfono o cambiar de app, el sistema congela la página y deja de
+> enviar. Es una limitación del navegador, no un fallo: reportar en
+> segundo plano exige una app nativa. La propia pantalla lo avisa.
+
+La zona segura de los datos de ejemplo está en Ciudad de México, así que
+desde otro lugar el titular saldrá "fuera" enseguida. Para probar la
+geocerca donde estés, mueve el centro y el radio desde
+`/simulador.html`.
+
 ### Simulador de zona segura
 
 Abre **`/simulador.html`** (por ejemplo `http://localhost:3000/simulador.html`).

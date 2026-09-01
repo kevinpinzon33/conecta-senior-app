@@ -675,7 +675,7 @@ function evaluarUbicacion(db, { lat, lng, precision }) {
 
 // Aqui reportaria el telefono del adulto mayor (hoy lo usa el simulador).
 app.post("/api/ubicacion", (req, res) => {
-  const { lat, lng, precision } = req.body || {};
+  const { lat, lng, precision, fuente } = req.body || {};
 
   if (typeof lat !== "number" || typeof lng !== "number") {
     return res.status(400).json({ error: "lat y lng deben ser numeros" });
@@ -685,7 +685,41 @@ app.post("/api/ubicacion", (req, res) => {
   }
 
   const db = loadDb();
+
+  // Si la peticion trae sesion, tiene que ser la del PROPIO adulto mayor.
+  // Un cuidador no puede mover la ubicacion de la persona a su cargo: seria
+  // poder fabricar una salida de zona segura, o taparla.
+  //
+  // Sin sesion se sigue aceptando porque el simulador de demos no inicia
+  // sesion (ver el bloque PENDIENTE del principio del archivo).
+  const usuario = usuarioDeLaPeticion(req, db);
+  if (usuario && usuario.rol !== "adulto_mayor") {
+    return res
+      .status(403)
+      .json({ error: "Solo el adulto mayor puede reportar su ubicación" });
+  }
+  if (usuario && db.senior.id !== usuario.seniorId) {
+    return res.status(403).json({ error: "No puedes reportar por otra persona" });
+  }
+
   const resultado = evaluarUbicacion(db, { lat, lng, precision });
+
+  // De donde vino la lectura. El panel del cuidador necesita distinguir
+  // "esto es el GPS del telefono de mi mama, ahora mismo" de "esto es el
+  // dato de ejemplo con el que arranca la app".
+  if (resultado.aceptada) {
+    const esGps = fuente === "gps" || (usuario && usuario.rol === "adulto_mayor");
+    db.senior.ubicacion.fuente = esGps ? "gps" : "simulador";
+    db.senior.ubicacion.precision =
+      typeof precision === "number" ? Math.round(precision) : null;
+    if (esGps) {
+      // La direccion del seed es inventada; dejarla puesta junto a unas
+      // coordenadas reales haria creer que la persona esta en una calle
+      // donde no esta.
+      db.senior.ubicacion.direccion = "Ubicación compartida en vivo";
+    }
+  }
+
   saveDb(db);
   res.json({ ...resultado, config: GEOCERCA, zonaSegura: db.senior.zonaSegura });
 });
@@ -731,6 +765,13 @@ app.post("/api/simulador/reiniciar", (req, res) => {
   db.senior.ubicacion.lat = db.senior.zonaSegura.lat;
   db.senior.ubicacion.lng = db.senior.zonaSegura.lng;
   db.senior.ubicacion.actualizadoEn = new Date().toISOString();
+  // Tambien el origen: si no, tras una prueba con GPS real el panel
+  // seguiria diciendo "EN VIVO" sobre una posicion que ya es de mentira.
+  db.senior.ubicacion.fuente = "simulador";
+  db.senior.ubicacion.precision = null;
+  db.senior.ubicacion.direccion = JSON.parse(
+    fs.readFileSync(SEED_PATH, "utf-8")
+  ).senior.ubicacion.direccion;
   db.alertas = db.alertas.filter((a) => a.tipo !== "zona");
   db.senior.status = db.alertas.some((a) => a.estado === "pendiente")
     ? "alerta"

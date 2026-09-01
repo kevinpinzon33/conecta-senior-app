@@ -23,6 +23,7 @@ const ICONS = {
   basura: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`,
   salir: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>`,
   escudo: `<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg>`,
+  senal: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14 0"/><path d="M8.5 16.43a6 6 0 0 1 7 0"/><line x1="12" y1="20" x2="12.01" y2="20"/><path d="M2 8.82a15 15 0 0 1 20 0"/></svg>`,
   frasco: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3h6v3l3 5v10a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V11l3-5z"/><line x1="6" y1="14" x2="18" y2="14"/></svg>`,
   lapiz: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>`,
   persona: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="7" r="4"/></svg>`,
@@ -158,6 +159,26 @@ function fmtDateTime(iso) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+// Enlace al mapa. Lo arma la app con las coordenadas que devuelve el
+// servidor; nunca se acepta una URL de fuera.
+function urlMapa(lat, lng) {
+  return `https://www.google.com/maps?q=${Number(lat)},${Number(lng)}`;
+}
+
+const METROS_POR_GRADO_LAT = 111320;
+
+// Cuántos metros al este y al norte está un punto respecto del centro de
+// la zona segura. Es lo que permite dibujar dónde está la persona DENTRO
+// del mapa estilizado, en vez de en una posición fija.
+function desplazamientoEnMetros(centro, punto) {
+  const metrosPorGradoLng =
+    METROS_POR_GRADO_LAT * Math.cos((centro.lat * Math.PI) / 180);
+  return {
+    este: (punto.lng - centro.lng) * metrosPorGradoLng,
+    norte: (punto.lat - centro.lat) * METROS_POR_GRADO_LAT,
+  };
 }
 
 function primerNombre(nombre) {

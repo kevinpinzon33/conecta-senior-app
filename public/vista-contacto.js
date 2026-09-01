@@ -193,7 +193,7 @@ function renderInicio() {
         </svg>
         <div class="safe-zone"></div>
         <div class="you-dot"><div class="dot"></div><span>Tú</span></div>
-        <div class="presence ${s.status}">
+        <div class="presence ${s.status}" style="${estiloPosicion(s)}">
           <div class="ring-pulse"></div>
           <div class="ring-pulse delay"></div>
           <div class="presence-avatar">${esc(s.nombre.charAt(0))}</div>
@@ -205,17 +205,30 @@ function renderInicio() {
           <span class="pill ${s.status}">${ICONS.check} ${
             s.status === "alerta" ? "Alerta activa" : "Dentro de la zona segura"
           }</span>
-          <span class="time">${ICONS.clock} ${timeAgo(s.ubicacion.actualizadoEn)}</span>
+          <span class="time">${
+            enVivo(s) ? '<span class="punto-vivo"></span>EN VIVO · ' : ""
+          }${ICONS.clock} ${timeAgo(s.ubicacion.actualizadoEn)}</span>
         </div>
         <div class="address-block">
           ${ICONS.pin}
           <div>
             <p>${esc(s.ubicacion.direccion)}</p>
-            <p class="coords">${s.ubicacion.lat.toFixed(4)}° N, ${Math.abs(s.ubicacion.lng).toFixed(4)}° O</p>
+            <p class="coords">${s.ubicacion.lat.toFixed(5)}, ${s.ubicacion.lng.toFixed(5)}${
+              enVivo(s) && s.ubicacion.precision
+                ? ` · ±${s.ubicacion.precision} m`
+                : ""
+            }</p>
           </div>
         </div>
         <div class="map-meta">
           <span>Radio zona segura: ${s.zonaSegura.radioM} m</span>
+          ${
+            enVivo(s)
+              ? `<a href="${urlMapa(s.ubicacion.lat, s.ubicacion.lng)}"
+                    target="_blank" rel="noopener noreferrer"
+                    class="ver-mapa">Ver en el mapa</a>`
+              : ""
+          }
         </div>
       </div>
     </div>
@@ -244,6 +257,41 @@ function renderInicio() {
   };
 
   conectarEventosRecordatorios();
+}
+
+// ¿Los datos vienen del teléfono de la persona, ahora mismo? Importa
+// distinguirlo del dato de ejemplo con el que arranca la app: un
+// cuidador no debe creer que está viendo a su madre en vivo cuando en
+// realidad mira una coordenada inventada del seed.
+function enVivo(s) {
+  return s.ubicacion.fuente === "gps";
+}
+
+// Coloca a la persona DENTRO del mapa estilizado, en su posición real
+// respecto al centro de la zona segura. Antes estaba clavada en un punto
+// fijo, así que el mapa no reflejaba nada: ahora, si se aleja, se ve
+// alejarse.
+//
+// El círculo de la zona mide 180px de lado y representa el radio, así
+// que la escala sale de ahí. Se recorta a los bordes para que alguien
+// que se fue lejos siga apareciendo, pegado al borde, en vez de
+// desaparecer del recuadro.
+function estiloPosicion(s) {
+  const zona = s.zonaSegura;
+  if (!zona || typeof s.ubicacion.lat !== "number") return "";
+
+  const { este, norte } = desplazamientoEnMetros(zona, s.ubicacion);
+  const pxPorMetro = 90 / zona.radioM; // el circulo dibujado mide 90px de radio
+
+  // Se desplaza desde el CENTRO del circulo con calc(), en vez de contra
+  // un ancho fijo: el contenedor cambia de tamaño con la pantalla y unas
+  // coordenadas en px absolutos dejarian el punto descuadrado respecto a
+  // la zona segura. El 48% vertical es el mismo que usa .safe-zone.
+  const tope = (v, max) => Math.max(-max, Math.min(max, v));
+  const x = tope(este * pxPorMetro, 140);
+  const y = tope(-norte * pxPorMetro, 100);
+
+  return `left: calc(50% + ${x.toFixed(1)}px); top: calc(48% + ${y.toFixed(1)}px);`;
 }
 
 function renderAlertas() {
