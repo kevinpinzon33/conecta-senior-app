@@ -2,3 +2,9 @@ node_modules/
 db.json
 *.log
 .DS_Store
+
+# Variables de entorno: NUNCA se suben. La plantilla sin valores es
+# .env.example, que si se versiona.
+.env
+.env.*
+!.env.example

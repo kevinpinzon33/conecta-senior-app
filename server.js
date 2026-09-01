@@ -207,6 +207,34 @@ app.get("/api/auth/yo", requiereAuth, (req, res) => {
   res.json({ usuario: usuarioPublico(req.usuario) });
 });
 
+// --- Configuracion que el frontend necesita saber -------------------------
+//
+// Hoy solo sirve para el mapa. La clave de Google Maps llega por variable
+// de entorno y NO se guarda en el repositorio: en Render se pone en
+// Environment > Add Environment Variable.
+//
+// ── POR QUE SE ENTREGA AL NAVEGADOR ────────────────────────────────
+// Una clave de Maps JavaScript es publica por naturaleza: el navegador
+// tiene que verla para cargar el mapa, y cualquiera puede leerla en las
+// herramientas de desarrollo. Lo que la protege NO es esconderla, sino
+// restringirla en Google Cloud a este dominio (restriccion por
+// referente HTTP) y a la API de Maps. Sin esas restricciones, la clave
+// sirve desde cualquier sitio y el consumo lo paga el titular.
+//
+// Aun asi se pide sesion: no hace falta repartirla a quien ni siquiera
+// ha entrado.
+app.get("/api/config", requiereAuth, (req, res) => {
+  const clave = (process.env.GOOGLE_MAPS_API_KEY || "").trim();
+  res.json({
+    mapa: {
+      // Sin clave configurada, el frontend usa el mapa estilizado de
+      // siempre. La app no se rompe: solo se ve menos preciso.
+      proveedor: clave ? "google" : "ninguno",
+      apiKey: clave || null,
+    },
+  });
+});
+
 // --- API -----------------------------------------------------------------
 
 // Los dos roles leen los mismos datos del adulto mayor; lo que cambia es

@@ -116,6 +116,11 @@ async function iniciarSesionEnLaApp() {
   renderTopbar();
   screenEl.innerHTML = '<div class="loading">Cargando…</div>';
 
+  // Una sola vez por sesion: dice si hay clave de Google Maps. Va antes
+  // del primer pintado para que la pantalla no muestre primero el mapa
+  // estilizado y lo cambie un segundo despues.
+  if (typeof cargarConfigMapa === "function") await cargarConfigMapa();
+
   // El compartir de ubicacion cambia de estado por su cuenta (permiso
   // concedido, primer fix, error del GPS). Sin esto habria que esperar
   // al refresco de 15 s para enterarse.

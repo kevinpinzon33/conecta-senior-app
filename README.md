@@ -124,6 +124,25 @@ Todo lo que hagas se guarda en `conecta-senior-app/db.json` — puedes
 abrir ese archivo con cualquier editor de texto para ver los datos
 crudos, o borrarlo para reiniciar con los datos de ejemplo.
 
+## 3 bis. Mapa de Google (opcional)
+
+El panel del cuidador usa **Google Maps** si hay una clave configurada.
+**Sin clave la app funciona igual**, solo que con el mapa estilizado
+simple. Para activarlo:
+
+1. En `console.cloud.google.com`: crear proyecto, habilitar **Maps
+   JavaScript API** y activar la facturación (Google la exige aunque el
+   uso caiga dentro del crédito gratuito).
+2. Crear una clave y **restringirla**: por *referente HTTP* a
+   `https://conecta-senior-app.onrender.com/*`, y por *API* solo a Maps
+   JavaScript API. Sin esto la clave sirve desde cualquier sitio.
+3. En Render → Environment → añadir:
+   ```
+   GOOGLE_MAPS_API_KEY = <la clave>
+   ```
+
+Para correrlo en tu computadora, la misma variable antes de `npm start`.
+
 ## 4. Subirlo a internet gratis (para que NO dependa de tu PC)
 
 Esto lo deja corriendo 24/7 en un servidor gratuito. Tu iPhone se

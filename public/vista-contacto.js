@@ -182,24 +182,9 @@ function renderInicio() {
     </div>
 
     <div class="map-card">
-      <div class="map-canvas">
-        <svg class="streets" viewBox="0 0 400 260" preserveAspectRatio="none">
-          <line x1="0" y1="55" x2="400" y2="40" stroke="#2E3440" stroke-width="10"/>
-          <line x1="0" y1="160" x2="400" y2="175" stroke="#2E3440" stroke-width="14"/>
-          <line x1="90" y1="0" x2="60" y2="260" stroke="#2E3440" stroke-width="9"/>
-          <line x1="290" y1="0" x2="320" y2="260" stroke="#2E3440" stroke-width="9"/>
-          <circle cx="120" cy="80" r="24" fill="#242A34"/>
-          <circle cx="300" cy="200" r="30" fill="#242A34"/>
-        </svg>
-        <div class="safe-zone"></div>
-        <div class="you-dot"><div class="dot"></div><span>Tú</span></div>
-        <div class="presence ${s.status}" style="${estiloPosicion(s)}">
-          <div class="ring-pulse"></div>
-          <div class="ring-pulse delay"></div>
-          <div class="presence-avatar">${esc(s.nombre.charAt(0))}</div>
-          <div class="presence-pin">${ICONS.pin}</div>
-        </div>
-      </div>
+      <div class="map-canvas" id="mapaHueco">${
+        hayMapaReal() ? "" : mapaEstilizado(s)
+      }</div>
       <div class="map-info">
         <div class="map-info-row">
           <span class="pill ${s.status}">${ICONS.check} ${
@@ -247,6 +232,17 @@ function renderInicio() {
     </div>
   `;
 
+  // El mapa de Google se coloca DESPUES de escribir el HTML, porque
+  // necesita un contenedor ya presente en el documento. Si falla (clave
+  // mal configurada, sin red), se dibuja el estilizado de siempre: la
+  // pantalla nunca se queda con un recuadro vacio.
+  const hueco = document.getElementById("mapaHueco");
+  if (hayMapaReal() && hueco) {
+    montarMapaGoogle(hueco, s).then((ok) => {
+      if (!ok && hueco.childElementCount === 0) hueco.innerHTML = mapaEstilizado(s);
+    });
+  }
+
   document.getElementById("btnVisto").onclick = async () => {
     await api("/senior/marcar-visto", { method: "POST" });
     refreshAll();
@@ -257,6 +253,31 @@ function renderInicio() {
   };
 
   conectarEventosRecordatorios();
+}
+
+// El mapa estilizado de siempre: cuatro calles inventadas y el punto
+// colocado por coordenadas. Ya no es lo que se ve normalmente, pero
+// sigue siendo el respaldo cuando no hay clave de Google Maps
+// configurada o cuando el mapa real no carga. Sin esto, quedarse sin
+// clave dejaria la pantalla principal con un hueco gris.
+function mapaEstilizado(s) {
+  return `
+    <svg class="streets" viewBox="0 0 400 260" preserveAspectRatio="none">
+      <line x1="0" y1="55" x2="400" y2="40" stroke="#2E3440" stroke-width="10"/>
+      <line x1="0" y1="160" x2="400" y2="175" stroke="#2E3440" stroke-width="14"/>
+      <line x1="90" y1="0" x2="60" y2="260" stroke="#2E3440" stroke-width="9"/>
+      <line x1="290" y1="0" x2="320" y2="260" stroke="#2E3440" stroke-width="9"/>
+      <circle cx="120" cy="80" r="24" fill="#242A34"/>
+      <circle cx="300" cy="200" r="30" fill="#242A34"/>
+    </svg>
+    <div class="safe-zone"></div>
+    <div class="you-dot"><div class="dot"></div><span>Tú</span></div>
+    <div class="presence ${s.status}" style="${estiloPosicion(s)}">
+      <div class="ring-pulse"></div>
+      <div class="ring-pulse delay"></div>
+      <div class="presence-avatar">${esc(s.nombre.charAt(0))}</div>
+      <div class="presence-pin">${ICONS.pin}</div>
+    </div>`;
 }
 
 // ¿Los datos vienen del teléfono de la persona, ahora mismo? Importa

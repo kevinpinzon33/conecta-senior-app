@@ -787,3 +787,24 @@ body.en-login #screen { display: flex; align-items: center; }
 /* El punto de la persona se mueve por JS: sin transición saltaría de
    golpe entre lecturas, y con ella se ve el desplazamiento. */
 .presence { transition: left 0.6s ease-out, top 0.6s ease-out; }
+
+/* ======================================================================
+   MAPA DE GOOGLE
+   Ocupa el mismo hueco que ocupaba el mapa estilizado, para que el resto
+   de la tarjeta (estado, dirección, radio) no cambie de sitio.
+   ====================================================================== */
+
+.mapa-google { width: 100%; height: 100%; }
+
+/* Google inyecta su propio fondo blanco mientras carga los tiles; sin
+   esto se ve un destello blanco en una interfaz oscura. */
+.map-canvas .mapa-google > div { background: #1f2530 !important; }
+
+/* Los controles de Google traen su propio estilo claro. Se oscurecen
+   para que no canten dentro de la app. */
+.map-canvas .gm-style-cc,
+.map-canvas .gmnoprint a { opacity: 0.55; }
+.map-canvas button.gm-control-active {
+  background: rgba(37,41,49,0.92) !important;
+  border: 1px solid var(--linea) !important;
+}
