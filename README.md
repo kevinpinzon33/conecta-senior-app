@@ -124,24 +124,20 @@ Todo lo que hagas se guarda en `conecta-senior-app/db.json` — puedes
 abrir ese archivo con cualquier editor de texto para ver los datos
 crudos, o borrarlo para reiniciar con los datos de ejemplo.
 
-## 3 bis. Mapa de Google (opcional)
+## 3 bis. El mapa
 
-El panel del cuidador usa **Google Maps** si hay una clave configurada.
-**Sin clave la app funciona igual**, solo que con el mapa estilizado
-simple. Para activarlo:
+El panel del cuidador muestra un mapa real con calles y edificios, usando
+**OpenStreetMap**. No hace falta configurar nada: ni clave de API, ni
+tarjeta de crédito, ni registro.
 
-1. En `console.cloud.google.com`: crear proyecto, habilitar **Maps
-   JavaScript API** y activar la facturación (Google la exige aunque el
-   uso caiga dentro del crédito gratuito).
-2. Crear una clave y **restringirla**: por *referente HTTP* a
-   `https://conecta-senior-app.onrender.com/*`, y por *API* solo a Maps
-   JavaScript API. Sin esto la clave sirve desde cualquier sitio.
-3. En Render → Environment → añadir:
-   ```
-   GOOGLE_MAPS_API_KEY = <la clave>
-   ```
+Si algún día prefieres Google Maps, la app ya lo soporta: basta con poner
+la variable `GOOGLE_MAPS_API_KEY` (en Render → Environment) y el mapa
+cambia solo. Ten en cuenta que Google exige activar la facturación del
+proyecto aunque el uso caiga dentro de su crédito gratuito, y que
+conviene restringir la clave por referente HTTP a tu dominio.
 
-Para correrlo en tu computadora, la misma variable antes de `npm start`.
+Si el mapa no carga (sin conexión, o el CDN caído), la app dibuja un mapa
+esquemático simple en su lugar: nunca se queda con un hueco vacío.
 
 ## 4. Subirlo a internet gratis (para que NO dependa de tu PC)
 

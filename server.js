@@ -209,9 +209,16 @@ app.get("/api/auth/yo", requiereAuth, (req, res) => {
 
 // --- Configuracion que el frontend necesita saber -------------------------
 //
-// Hoy solo sirve para el mapa. La clave de Google Maps llega por variable
-// de entorno y NO se guarda en el repositorio: en Render se pone en
-// Environment > Add Environment Variable.
+// Hoy solo sirve para elegir el proveedor del mapa.
+//
+// Por defecto se usa OpenStreetMap: da calles y edificios de verdad sin
+// clave de API, sin tarjeta de credito y sin cuota que vigilar. Es lo
+// que esta activo.
+//
+// Google queda soportado por si alguna vez interesa: basta con poner
+// GOOGLE_MAPS_API_KEY como variable de entorno (en Render, en
+// Environment > Add Environment Variable) y el frontend cambia solo.
+// Esa clave NUNCA se guarda en el repositorio.
 //
 // ── POR QUE SE ENTREGA AL NAVEGADOR ────────────────────────────────
 // Una clave de Maps JavaScript es publica por naturaleza: el navegador
@@ -227,9 +234,10 @@ app.get("/api/config", requiereAuth, (req, res) => {
   const clave = (process.env.GOOGLE_MAPS_API_KEY || "").trim();
   res.json({
     mapa: {
-      // Sin clave configurada, el frontend usa el mapa estilizado de
-      // siempre. La app no se rompe: solo se ve menos preciso.
-      proveedor: clave ? "google" : "ninguno",
+      // Por defecto OpenStreetMap: da calles y edificios reales sin
+      // clave, sin tarjeta y sin cuota. Si algun dia se configura
+      // GOOGLE_MAPS_API_KEY, se usa Google en su lugar sin tocar codigo.
+      proveedor: clave ? "google" : "osm",
       apiKey: clave || null,
     },
   });

@@ -232,13 +232,13 @@ function renderInicio() {
     </div>
   `;
 
-  // El mapa de Google se coloca DESPUES de escribir el HTML, porque
-  // necesita un contenedor ya presente en el documento. Si falla (clave
-  // mal configurada, sin red), se dibuja el estilizado de siempre: la
+  // El mapa real se coloca DESPUES de escribir el HTML, porque necesita
+  // un contenedor ya presente en el documento y con tamaño. Si falla
+  // (sin red, CDN caido), se dibuja el estilizado de siempre: la
   // pantalla nunca se queda con un recuadro vacio.
   const hueco = document.getElementById("mapaHueco");
   if (hayMapaReal() && hueco) {
-    montarMapaGoogle(hueco, s).then((ok) => {
+    montarMapaReal(hueco, s).then((ok) => {
       if (!ok && hueco.childElementCount === 0) hueco.innerHTML = mapaEstilizado(s);
     });
   }
@@ -257,9 +257,9 @@ function renderInicio() {
 
 // El mapa estilizado de siempre: cuatro calles inventadas y el punto
 // colocado por coordenadas. Ya no es lo que se ve normalmente, pero
-// sigue siendo el respaldo cuando no hay clave de Google Maps
-// configurada o cuando el mapa real no carga. Sin esto, quedarse sin
-// clave dejaria la pantalla principal con un hueco gris.
+// sigue siendo el respaldo cuando el mapa real no carga (sin red, CDN
+// caido). Sin esto, un fallo de red dejaria la pantalla principal con
+// un hueco gris.
 function mapaEstilizado(s) {
   return `
     <svg class="streets" viewBox="0 0 400 260" preserveAspectRatio="none">

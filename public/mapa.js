@@ -1,43 +1,79 @@
-// Mapa real de Google dentro de la app.
+// Mapa real dentro de la app.
 //
-// Sustituye al mapa estilizado (que era un SVG con cuatro calles
-// inventadas) por uno de verdad, con calles, edificios y la posición
-// exacta de la persona.
+// Sustituye al mapa estilizado (un SVG con cuatro calles inventadas) por
+// uno de verdad, con calles, edificios y la posición exacta de la
+// persona.
+//
+// ── QUÉ MAPA Y POR QUÉ ────────────────────────────────────────────
+//
+// Por defecto: **OpenStreetMap con Leaflet**. Da calles y edificios
+// reales sin clave de API, sin tarjeta de crédito y sin cuota que
+// vigilar. Para lo que hace falta aquí —ver en qué calle está una
+// persona— es más que suficiente.
+//
+// Google queda soportado por si algún día interesa: si el servidor
+// entrega una `apiKey`, se usa Google en lugar de OSM. El resto del
+// archivo (crear una vez, mover, actualizar marcador) es común a los
+// dos, así que el cambio no toca nada más.
 //
 // ── DOS DECISIONES QUE SOSTIENEN ESTE ARCHIVO ─────────────────────
 //
-// 1. SI NO HAY CLAVE, NO SE ROMPE NADA.
-//    El mapa de Google exige una clave de API. Si no está configurada,
-//    `hayMapaReal()` devuelve false y la vista dibuja el mapa
-//    estilizado de siempre. La app funciona igual, solo se ve menos
-//    preciso. Así el despliegue no depende de que alguien recuerde
-//    poner una variable de entorno.
+// 1. SI EL MAPA NO CARGA, NO SE ROMPE NADA.
+//    Sin red, con el CDN caído o con una clave mal configurada, la
+//    vista dibuja el mapa estilizado de siempre. La pantalla nunca se
+//    queda con un recuadro gris.
 //
 // 2. EL MAPA SE CREA UNA SOLA VEZ Y SE MUEVE, NO SE RECREA.
 //    La pantalla se repinta entera cada 15 segundos (refreshAll ->
 //    innerHTML). Si el mapa viviera dentro de ese HTML, en cada
 //    refresco se destruiría y se volvería a crear: parpadeo, pérdida
-//    del zoom que el usuario había puesto, y —lo que de verdad
-//    importa— una carga de mapa facturable cada 15 segundos, que son
-//    240 por hora y por cuidador.
+//    del zoom que el cuidador hubiera puesto y descarga inútil de
+//    tiles cada 15 segundos.
 //
 //    Por eso el nodo del mapa vive fuera del ciclo de render, guardado
-//    en `nodoMapa`, y después de cada repintado se MUEVE a su hueco con
-//    appendChild. Mover un nodo conserva el mapa vivo.
+//    en `Mapa.nodoMapa`, y después de cada repintado se MUEVE a su
+//    hueco con appendChild. Mover un nodo conserva el mapa vivo.
+
+const LEAFLET_JS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+const LEAFLET_CSS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+
+// Teselas de OpenStreetMap. Se probaron antes las oscuras de CARTO y se
+// descartaron: ahora estampan "API KEY REQUIRED" sobre el mapa, que es
+// justo lo que se queria evitar. Estas no piden clave ni registro; su
+// licencia solo exige mantener la atribucion, que Leaflet pinta abajo a
+// la derecha.
+//
+// Vienen en claro, asi que se oscurecen por CSS (ver .leaflet-tile-pane
+// en styles.css). El filtro se aplica SOLO a la capa de teselas, no al
+// marcador ni a los circulos, que ya tienen los colores de la marca.
+const TILES = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+const ATRIBUCION =
+  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
 
 const Mapa = {
   config: null, // { proveedor, apiKey } — lo entrega GET /api/config
-  cargando: null, // promesa de carga del script, para no pedirlo dos veces
+  cargando: null, // promesa de carga, para no pedir la librería dos veces
   nodoMapa: null, // el div persistente que contiene el mapa
-  mapa: null, // instancia de google.maps.Map
+  mapa: null, // instancia de Leaflet o de google.maps.Map
   marcador: null,
   circuloPrecision: null,
   circuloZona: null,
   ultimoCentrado: null, // para no re-centrar en cada repintado
 };
 
+const COLOR = {
+  presente: "#2E9E5E",
+  cuidado: "#E8A33D",
+  alerta: "#E8622C",
+};
+
+function proveedorMapa() {
+  return Mapa.config ? Mapa.config.proveedor : "ninguno";
+}
+
 function hayMapaReal() {
-  return !!(Mapa.config && Mapa.config.proveedor === "google" && Mapa.config.apiKey);
+  const p = proveedorMapa();
+  return p === "osm" || (p === "google" && !!Mapa.config.apiKey);
 }
 
 /** Se llama una vez al entrar. Si falla, se sigue con el mapa estilizado. */
@@ -50,85 +86,150 @@ async function cargarConfigMapa() {
   }
 }
 
-// ── Carga del script de Google ───────────────────────────────────
+// ── Carga de la librería ─────────────────────────────────────────
 
-function cargarScriptGoogle() {
+function cargarEtiqueta(tag, atributos) {
+  return new Promise((resolver, rechazar) => {
+    const el = document.createElement(tag);
+    Object.assign(el, atributos);
+    el.onload = () => resolver();
+    el.onerror = () => rechazar(new Error("No se pudo cargar " + (atributos.src || atributos.href)));
+    document.head.appendChild(el);
+  });
+}
+
+function cargarLibreria() {
   if (Mapa.cargando) return Mapa.cargando;
 
-  Mapa.cargando = new Promise((resolver, rechazar) => {
-    if (window.google && window.google.maps) return resolver();
+  Mapa.cargando = (async () => {
+    if (proveedorMapa() === "google") {
+      if (window.google && window.google.maps) return;
+      await cargarEtiqueta("script", {
+        src:
+          "https://maps.googleapis.com/maps/api/js?key=" +
+          encodeURIComponent(Mapa.config.apiKey) +
+          "&language=es&region=CO&loading=async",
+        async: true,
+      });
+      return;
+    }
 
-    const s = document.createElement("script");
-    s.src =
-      "https://maps.googleapis.com/maps/api/js?key=" +
-      encodeURIComponent(Mapa.config.apiKey) +
-      "&language=es&region=CO&loading=async";
-    s.async = true;
-    s.onload = () => resolver();
-    // Clave inválida, sin conexión o dominio no autorizado: se resuelve
-    // como fallo y la vista cae al mapa estilizado en vez de quedarse
-    // con un recuadro gris para siempre.
-    s.onerror = () => rechazar(new Error("No se pudo cargar Google Maps"));
-    document.head.appendChild(s);
-  });
+    if (window.L) return;
+    // El CSS primero: sin él Leaflet dibuja las teselas descolocadas.
+    await cargarEtiqueta("link", { rel: "stylesheet", href: LEAFLET_CSS });
+    await cargarEtiqueta("script", { src: LEAFLET_JS, async: true });
+  })();
 
   return Mapa.cargando;
 }
 
-// ── Estilo oscuro, para que no desentone con la app ──────────────
-// Es el mapa de Google con los colores de la marca; sin esto aparece un
-// rectángulo blanco brillante en medio de una interfaz oscura.
-const ESTILO_OSCURO = [
-  { elementType: "geometry", stylers: [{ color: "#1f2530" }] },
-  { elementType: "labels.text.stroke", stylers: [{ color: "#181b21" }] },
-  { elementType: "labels.text.fill", stylers: [{ color: "#9a9080" }] },
-  { featureType: "poi", elementType: "labels.text.fill", stylers: [{ color: "#8a8272" }] },
-  { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#1d2a24" }] },
-  { featureType: "road", elementType: "geometry", stylers: [{ color: "#2e3440" }] },
-  { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#9a9080" }] },
-  { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#3a4152" }] },
-  { featureType: "transit", elementType: "geometry", stylers: [{ color: "#252931" }] },
-  { featureType: "water", elementType: "geometry", stylers: [{ color: "#141a24" }] },
-  { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#4e5a6b" }] },
-];
+// ── OpenStreetMap (Leaflet) ──────────────────────────────────────
 
-const COLOR = {
-  presente: "#2E9E5E",
-  cuidado: "#E8A33D",
-  alerta: "#E8622C",
-};
+function crearMapaOSM(s) {
+  const centro = [s.ubicacion.lat, s.ubicacion.lng];
 
-function crearMapa(s) {
-  Mapa.nodoMapa = document.createElement("div");
-  Mapa.nodoMapa.className = "mapa-google";
+  Mapa.mapa = L.map(Mapa.nodoMapa, {
+    center: centro,
+    zoom: 16,
+    zoomControl: true,
+    attributionControl: true,
+  });
 
+  L.tileLayer(TILES, {
+    attribution: ATRIBUCION,
+    maxZoom: 19,
+  }).addTo(Mapa.mapa);
+
+  // Margen de error del GPS. Dibujarlo es honesto: si el círculo es
+  // grande, quien mira sabe que la posición aún no es de fiar.
+  Mapa.circuloPrecision = L.circle(centro, {
+    radius: 0,
+    color: "#C9A535",
+    weight: 1,
+    opacity: 0.5,
+    fillColor: "#C9A535",
+    fillOpacity: 0.12,
+    interactive: false,
+  }).addTo(Mapa.mapa);
+
+  // Zona segura: solo el contorno, sin relleno. Marcarla entera tapaba
+  // el mapa justo donde hay que mirar; una línea fina basta para saber
+  // dónde está el límite.
+  Mapa.circuloZona = L.circle([s.zonaSegura.lat, s.zonaSegura.lng], {
+    radius: s.zonaSegura.radioM,
+    color: COLOR.presente,
+    weight: 1.5,
+    opacity: 0.55,
+    dashArray: "6 6",
+    fill: false,
+    interactive: false,
+  }).addTo(Mapa.mapa);
+
+  Mapa.marcador = L.circleMarker(centro, iconoOSM(s.status)).addTo(Mapa.mapa);
+}
+
+function iconoOSM(status) {
+  const color = COLOR[status] || COLOR.presente;
+  return {
+    radius: 9,
+    color: "#181B21",
+    weight: 3,
+    fillColor: color,
+    fillOpacity: 1,
+  };
+}
+
+function actualizarMapaOSM(s) {
+  const pos = [s.ubicacion.lat, s.ubicacion.lng];
+
+  Mapa.marcador.setLatLng(pos);
+  Mapa.marcador.setStyle(iconoOSM(s.status));
+
+  Mapa.circuloPrecision.setLatLng(pos);
+  Mapa.circuloPrecision.setRadius(radioPrecision(s));
+
+  Mapa.circuloZona.setLatLng([s.zonaSegura.lat, s.zonaSegura.lng]);
+  Mapa.circuloZona.setRadius(s.zonaSegura.radioM);
+  Mapa.circuloZona.setStyle({
+    color: s.status === "alerta" ? COLOR.alerta : COLOR.presente,
+  });
+
+  if (seMovio(s)) Mapa.mapa.panTo(pos);
+}
+
+// ── Google Maps (solo si hay clave configurada) ──────────────────
+
+function crearMapaGoogle(s) {
   const centro = { lat: s.ubicacion.lat, lng: s.ubicacion.lng };
 
   Mapa.mapa = new google.maps.Map(Mapa.nodoMapa, {
     center: centro,
     zoom: 16,
-    styles: ESTILO_OSCURO,
     disableDefaultUI: true,
     zoomControl: true,
-    gestureHandling: "greedy", // dentro de la app, un dedo basta para mover
+    gestureHandling: "greedy",
     clickableIcons: false,
+    styles: [
+      { elementType: "geometry", stylers: [{ color: "#1f2530" }] },
+      { elementType: "labels.text.stroke", stylers: [{ color: "#181b21" }] },
+      { elementType: "labels.text.fill", stylers: [{ color: "#9a9080" }] },
+      { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#1d2a24" }] },
+      { featureType: "road", elementType: "geometry", stylers: [{ color: "#2e3440" }] },
+      { featureType: "water", elementType: "geometry", stylers: [{ color: "#141a24" }] },
+    ],
   });
 
-  // Zona segura
   Mapa.circuloZona = new google.maps.Circle({
     map: Mapa.mapa,
     center: { lat: s.zonaSegura.lat, lng: s.zonaSegura.lng },
     radius: s.zonaSegura.radioM,
     strokeColor: COLOR.presente,
-    strokeOpacity: 0.85,
-    strokeWeight: 2,
-    fillColor: COLOR.presente,
-    fillOpacity: 0.08,
+    strokeOpacity: 0.55,
+    strokeWeight: 1.5,
+    fillOpacity: 0,
     clickable: false,
   });
 
-  // Margen de error del GPS. Dibujarlo es honesto: si el círculo es
-  // enorme, quien mira sabe que la posición no es de fiar todavía.
   Mapa.circuloPrecision = new google.maps.Circle({
     map: Mapa.mapa,
     center: centro,
@@ -145,52 +246,57 @@ function crearMapa(s) {
     map: Mapa.mapa,
     position: centro,
     title: s.nombre,
-    icon: iconoPersona(s.status),
+    icon: iconoGoogle(s.status),
   });
 }
 
-// Marcador dibujado a mano para que combine con la marca, en vez del
-// pin rojo por defecto de Google.
-function iconoPersona(status) {
-  const color = COLOR[status] || COLOR.presente;
+function iconoGoogle(status) {
   return {
     path: google.maps.SymbolPath.CIRCLE,
     scale: 10,
-    fillColor: color,
+    fillColor: COLOR[status] || COLOR.presente,
     fillOpacity: 1,
     strokeColor: "#181B21",
     strokeWeight: 3,
   };
 }
 
-function actualizarMapa(s) {
+function actualizarMapaGoogle(s) {
   const pos = { lat: s.ubicacion.lat, lng: s.ubicacion.lng };
 
   Mapa.marcador.setPosition(pos);
-  Mapa.marcador.setIcon(iconoPersona(s.status));
+  Mapa.marcador.setIcon(iconoGoogle(s.status));
 
   Mapa.circuloPrecision.setCenter(pos);
-  // Sin precisión conocida (dato de ejemplo) no se dibuja el círculo:
-  // inventar un margen de error sería peor que no mostrarlo.
-  Mapa.circuloPrecision.setRadius(
-    s.ubicacion.fuente === "gps" && s.ubicacion.precision
-      ? s.ubicacion.precision
-      : 0
-  );
+  Mapa.circuloPrecision.setRadius(radioPrecision(s));
 
   Mapa.circuloZona.setCenter({ lat: s.zonaSegura.lat, lng: s.zonaSegura.lng });
   Mapa.circuloZona.setRadius(s.zonaSegura.radioM);
-  const colorZona = s.status === "alerta" ? COLOR.alerta : COLOR.presente;
-  Mapa.circuloZona.setOptions({ strokeColor: colorZona, fillColor: colorZona });
+  Mapa.circuloZona.setOptions({
+    strokeColor: s.status === "alerta" ? COLOR.alerta : COLOR.presente,
+  });
 
-  // Re-centrar SOLO cuando la persona se ha movido de verdad. Si se
-  // hiciera en cada repintado, el cuidador no podría arrastrar el mapa
-  // para mirar alrededor: cada 15 segundos se le volvería al centro.
-  const clave = pos.lat.toFixed(5) + "," + pos.lng.toFixed(5);
-  if (Mapa.ultimoCentrado !== clave) {
-    Mapa.ultimoCentrado = clave;
-    Mapa.mapa.panTo(pos);
-  }
+  if (seMovio(s)) Mapa.mapa.panTo(pos);
+}
+
+// ── Común a los dos ──────────────────────────────────────────────
+
+// Sin precisión conocida (el dato de ejemplo) no se dibuja el círculo:
+// inventar un margen de error sería peor que no mostrarlo.
+function radioPrecision(s) {
+  return s.ubicacion.fuente === "gps" && s.ubicacion.precision
+    ? s.ubicacion.precision
+    : 0;
+}
+
+// Re-centrar SOLO cuando la persona se ha movido de verdad. Si se
+// hiciera en cada repintado, el cuidador no podría arrastrar el mapa
+// para mirar alrededor: cada 15 segundos se le volvería al centro.
+function seMovio(s) {
+  const clave = s.ubicacion.lat.toFixed(5) + "," + s.ubicacion.lng.toFixed(5);
+  if (Mapa.ultimoCentrado === clave) return false;
+  Mapa.ultimoCentrado = clave;
+  return true;
 }
 
 /**
@@ -199,27 +305,42 @@ function actualizarMapa(s) {
  * @param {object} s           el adulto mayor
  * @returns {boolean} false si no se pudo y hay que usar el mapa estilizado
  */
-async function montarMapaGoogle(hueco, s) {
+async function montarMapaReal(hueco, s) {
   if (!hayMapaReal() || !hueco) return false;
 
   try {
-    await cargarScriptGoogle();
+    await cargarLibreria();
   } catch (_) {
-    // Clave mal configurada o sin red: se avisa una vez y se sigue con
-    // el mapa estilizado.
+    // Sin red, CDN caído o clave mal configurada: se deja de intentar y
+    // la vista cae al mapa estilizado.
     Mapa.config = null;
     return false;
   }
 
-  if (!Mapa.nodoMapa) crearMapa(s);
+  const esGoogle = proveedorMapa() === "google";
 
-  // Mover, no recrear.
-  if (Mapa.nodoMapa.parentElement !== hueco) hueco.appendChild(Mapa.nodoMapa);
+  if (!Mapa.nodoMapa) {
+    Mapa.nodoMapa = document.createElement("div");
+    Mapa.nodoMapa.className = "mapa-real";
+    // Leaflet mide el contenedor al crearse, así que tiene que estar ya
+    // dentro del documento y con tamaño. Por eso se inserta ANTES.
+    hueco.appendChild(Mapa.nodoMapa);
+    if (esGoogle) crearMapaGoogle(s);
+    else crearMapaOSM(s);
+  } else if (Mapa.nodoMapa.parentElement !== hueco) {
+    // Mover, no recrear.
+    hueco.appendChild(Mapa.nodoMapa);
+  }
 
-  actualizarMapa(s);
+  if (esGoogle) {
+    actualizarMapaGoogle(s);
+    google.maps.event.trigger(Mapa.mapa, "resize");
+  } else {
+    actualizarMapaOSM(s);
+    // Tras moverlo de sitio, Leaflet necesita recalcular su tamaño o
+    // dibuja el mapa recortado y con las teselas a medias.
+    Mapa.mapa.invalidateSize();
+  }
 
-  // Tras moverlo, Google necesita saber que cambió de sitio o dibuja el
-  // mapa recortado.
-  google.maps.event.trigger(Mapa.mapa, "resize");
   return true;
 }
