@@ -14,11 +14,37 @@ const SEED_PATH = path.join(__dirname, "db.seed.json");
 // real, este archivo se reemplaza por las llamadas a whatsapp.service.js
 // y alerta.controller.js sin tocar el frontend.
 
+// En la maquina de desarrollo el proyecto vive dentro de una carpeta de
+// OneDrive, que bloquea el archivo mientras lo sincroniza. Si una lectura
+// o una escritura cae justo en ese instante, Windows devuelve EBUSY (o
+// EPERM) y la peticion moriria con un 500 aunque no haya nada roto. El
+// bloqueo dura milisegundos, asi que basta con reintentar un poco.
+//
+// El servidor es de un solo hilo: aqui hay que esperar sin ceder el
+// control, o el reintento ocurriria antes de que OneDrive suelte nada.
+const DORMIDERA = new Int32Array(new SharedArrayBuffer(4));
+const REINTENTOS_DISCO = 12;
+const MS_ENTRE_REINTENTOS = 25;
+
+function conReintentos(accion) {
+  for (let intento = 0; ; intento++) {
+    try {
+      return accion();
+    } catch (err) {
+      const bloqueado = err.code === "EBUSY" || err.code === "EPERM";
+      if (!bloqueado || intento >= REINTENTOS_DISCO) throw err;
+      Atomics.wait(DORMIDERA, 0, 0, MS_ENTRE_REINTENTOS);
+    }
+  }
+}
+
 function loadDb() {
   if (!fs.existsSync(DB_PATH)) {
-    fs.copyFileSync(SEED_PATH, DB_PATH);
+    conReintentos(() => fs.copyFileSync(SEED_PATH, DB_PATH));
   }
-  return normalizarDb(JSON.parse(fs.readFileSync(DB_PATH, "utf-8")));
+  return normalizarDb(
+    JSON.parse(conReintentos(() => fs.readFileSync(DB_PATH, "utf-8")))
+  );
 }
 
 // Un db.json creado por una version anterior puede no tener los campos
@@ -49,7 +75,8 @@ function normalizarDb(db) {
 }
 
 function saveDb(db) {
-  fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
+  const texto = JSON.stringify(db, null, 2);
+  conReintentos(() => fs.writeFileSync(DB_PATH, texto));
 }
 
 const app = express();
@@ -706,19 +733,30 @@ function evaluarUbicacion(db, { lat, lng, precision }) {
 // --- Direccion en texto (geocodificacion inversa) -------------------------
 //
 // Unas coordenadas no le dicen nada a nadie. "Calle 181 #13-54" si. Esto
-// convierte lo uno en lo otro usando Nominatim, el geocodificador de
-// OpenStreetMap: gratuito, sin clave y sin tarjeta, igual que las
-// teselas del mapa.
+// convierte lo uno en lo otro con datos de OpenStreetMap: gratuito, sin
+// clave y sin tarjeta, igual que las teselas del mapa.
 //
 // ── POR QUE EN EL SERVIDOR Y NO EN EL NAVEGADOR ────────────────────
-//   1. Nominatim exige un User-Agent que identifique la aplicacion, y
-//      un navegador no puede fijar esa cabecera.
+//   1. Estos servicios piden un User-Agent que identifique a la
+//      aplicacion, y un navegador no puede fijar esa cabecera.
 //   2. Una sola consulta sirve para todos los cuidadores que miren.
 //   3. El limite de peticiones se controla en un solo sitio.
 //
+// ── POR QUE HAY DOS PROVEEDORES ───────────────────────────────────
+// Nominatim funciona perfecto desde una maquina de casa, pero desde
+// Render devuelve 429 (Too Many Requests) SIEMPRE: la IP de salida es
+// compartida entre muchos inquilinos y la cuota ya viene agotada por
+// otros. No es culpa de nuestro ritmo de peticiones, y por eso subir el
+// intervalo no lo arreglaria.
+//
+// Photon (del proyecto Komoot, tambien sobre datos de OpenStreetMap) si
+// atiende a IPs de centro de datos, asi que va primero. Nominatim queda
+// de respaldo: en local funciona, y si Photon se cae cubre el hueco.
+// Encima, para Bogota Photon da barrios de verdad ("Nicolas de
+// Federman", "Britalia") donde Nominatim devolvia "UPZs de Bogota".
+//
 // ── RESPETAR EL SERVICIO ──────────────────────────────────────────
-// Nominatim es un servicio comunitario gratuito y su politica de uso
-// pide como maximo una peticion por segundo. Consultarlo en cada
+// Los dos son servicios comunitarios gratuitos. Consultarlos en cada
 // lectura (cada 10 s por telefono) seria abusar sin necesidad, asi que
 // hay dos frenos:
 //   · Solo se vuelve a preguntar si la persona se movio de verdad
@@ -727,13 +765,12 @@ function evaluarUbicacion(db, { lat, lng, precision }) {
 //   · Un intervalo minimo entre peticiones, por si varios titulares
 //     reportan a la vez.
 //
-// Si Nominatim falla o tarda, NO pasa nada: se conserva la ultima
+// Si los dos fallan o tardan, NO pasa nada: se conserva la ultima
 // direccion conocida y la ubicacion sigue funcionando igual. Una
 // direccion bonita nunca puede costar una alerta.
 
 const GEOCODIFICACION = {
-  url: "https://nominatim.openstreetmap.org/reverse",
-  // La politica de Nominatim exige identificar la aplicacion.
+  // Los dos servicios piden identificar a quien llama.
   userAgent:
     "ConectaSenior/1.0 (https://conecta-senior-app.onrender.com; contacto@conectasenior.com.co)",
   metrosParaRepetir: 40,
@@ -744,49 +781,65 @@ const GEOCODIFICACION = {
 let ultimaPeticionGeo = 0;
 
 /**
- * Arma una direccion corta y legible a partir de la respuesta de
- * Nominatim. Se prefiere "via #numero, barrio, ciudad" porque es como
- * se dicen las direcciones en Colombia; el display_name completo trae
- * pais, codigo postal y region, que sobran en una pantalla de movil.
+ * Junta las piezas de una direccion como se dicen en Colombia:
+ * "via #numero, barrio, ciudad". Se dejan fuera el pais, la region y el
+ * codigo postal, que sobran en una pantalla de movil.
  */
-function armarDireccion(datos) {
+function juntarDireccion({ via, numero, barrio, ciudad }) {
+  const partes = [];
+  if (via) partes.push(numero ? `${via} #${numero}` : via);
+  if (barrio && barrio !== via) partes.push(barrio);
+
+  // OSM guarda la capital como "Bogota ciudad", que en pantalla suena
+  // raro. Se le quita ese apendice para que se lea como lo diria
+  // cualquiera.
+  const ciudadLimpia = ciudad ? ciudad.replace(/\s+ciudad$/i, "").trim() : null;
+  if (ciudadLimpia && ciudadLimpia !== barrio) partes.push(ciudadLimpia);
+
+  return partes.length ? partes.join(", ") : null;
+}
+
+/** Traduce la respuesta de Photon (GeoJSON) a una direccion legible. */
+function armarDireccionPhoton(datos) {
+  const rasgo = datos && datos.features && datos.features[0];
+  if (!rasgo) return null;
+  const p = rasgo.properties || {};
+
+  // `name` solo sirve como via cuando el resultado ES una calle. Para
+  // una casa, `name` es el nombre del edificio o del monumento
+  // ("Maquina Aplanadora a Vapor"), que no es una direccion.
+  const via = p.street || (p.type === "street" ? p.name : null);
+
+  return juntarDireccion({
+    via,
+    numero: p.housenumber || null,
+    barrio: p.locality || p.district || null,
+    ciudad: p.city || null,
+  });
+}
+
+/** Traduce la respuesta de Nominatim a una direccion legible. */
+function armarDireccionNominatim(datos) {
   if (!datos) return null;
   const a = datos.address || {};
 
-  const via = a.road || a.pedestrian || a.footway || a.residential || null;
-  const numero = a.house_number || null;
-
-  const partes = [];
-  if (via) partes.push(numero ? `${via} #${numero}` : via);
-
-  // `suburb` antes que `neighbourhood`: en Bogota, neighbourhood suele
-  // traer ruido administrativo ("UPZs de Bogota") mientras que suburb da
-  // algo que la gente reconoce ("Localidad Suba").
-  const barrio = a.suburb || a.neighbourhood || a.quarter || null;
-  if (barrio && barrio !== via) partes.push(barrio);
-
-  // OSM guarda la capital como "Bogota ciudad", que en pantalla suena raro.
-  // Se le quita ese apendice para que se lea como lo diria cualquiera.
-  let ciudad = a.city || a.town || a.village || a.municipality || null;
-  if (ciudad) ciudad = ciudad.replace(/\s+ciudad$/i, "").trim();
-  if (ciudad) partes.push(ciudad);
-
-  if (partes.length) return partes.join(", ");
+  const texto = juntarDireccion({
+    via: a.road || a.pedestrian || a.footway || a.residential || null,
+    numero: a.house_number || null,
+    // `suburb` antes que `neighbourhood`: en Bogota, neighbourhood suele
+    // traer ruido administrativo ("UPZs de Bogota") mientras que suburb
+    // da algo que la gente reconoce ("Localidad Suba").
+    barrio: a.suburb || a.neighbourhood || a.quarter || null,
+    ciudad: a.city || a.town || a.village || a.municipality || null,
+  });
+  if (texto) return texto;
 
   // Sin calle reconocida (un descampado, una via sin nombre): mejor la
   // descripcion larga recortada que dejarlo vacio.
   return datos.display_name ? String(datos.display_name).slice(0, 120) : null;
 }
 
-async function geocodificarInverso(lat, lng) {
-  const ahora = Date.now();
-  if (ahora - ultimaPeticionGeo < GEOCODIFICACION.msEntrePeticiones) return null;
-  ultimaPeticionGeo = ahora;
-
-  const url =
-    `${GEOCODIFICACION.url}?format=jsonv2&lat=${lat}&lon=${lng}` +
-    `&zoom=18&addressdetails=1&accept-language=es`;
-
+async function pedirJson(url) {
   const res = await fetch(url, {
     headers: {
       "User-Agent": GEOCODIFICACION.userAgent,
@@ -794,16 +847,55 @@ async function geocodificarInverso(lat, lng) {
     },
     signal: AbortSignal.timeout(GEOCODIFICACION.msTimeout),
   });
-
   if (!res.ok) {
-    // El cuerpo del error dice mucho: Nominatim contesta 403 con un
-    // texto explicando el motivo cuando bloquea a quien llama.
+    // El cuerpo del error dice mucho: estos servicios contestan con un
+    // texto explicando el motivo cuando bloquean a quien llama.
     const detalle = await res.text().catch(() => "");
-    throw new Error(
-      `Nominatim respondio ${res.status}: ${detalle.slice(0, 200)}`
-    );
+    throw new Error(`${res.status}: ${detalle.slice(0, 120)}`);
   }
-  return armarDireccion(await res.json());
+  return res.json();
+}
+
+// `layer=street&layer=house` evita que Photon conteste con el poligono
+// de la ciudad entera cuando no hay nada mas cerca; se prefiere quedarse
+// sin direccion antes que decir solo "Bogota".
+const PROVEEDORES = [
+  {
+    nombre: "photon",
+    url: (lat, lng) =>
+      `https://photon.komoot.io/reverse?lat=${lat}&lon=${lng}` +
+      `&layer=street&layer=house&limit=1`,
+    leer: armarDireccionPhoton,
+  },
+  {
+    nombre: "nominatim",
+    url: (lat, lng) =>
+      `https://nominatim.openstreetmap.org/reverse?format=jsonv2` +
+      `&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1&accept-language=es`,
+    leer: armarDireccionNominatim,
+  },
+];
+
+/**
+ * Devuelve { texto, proveedor }, o lanza con el detalle de por que
+ * fallaron los dos.
+ */
+async function geocodificarInverso(lat, lng) {
+  const ahora = Date.now();
+  if (ahora - ultimaPeticionGeo < GEOCODIFICACION.msEntrePeticiones) return null;
+  ultimaPeticionGeo = ahora;
+
+  const fallos = [];
+  for (const p of PROVEEDORES) {
+    try {
+      const texto = p.leer(await pedirJson(p.url(lat, lng)));
+      if (texto) return { texto, proveedor: p.nombre };
+      fallos.push(`${p.nombre}: sin direccion utilizable`);
+    } catch (err) {
+      fallos.push(`${p.nombre}: ${err.message}`);
+    }
+  }
+  throw new Error(fallos.join(" · "));
 }
 
 /** ¿Hace falta volver a preguntar la direccion para estas coordenadas? */
@@ -825,16 +917,16 @@ function necesitaDireccion(ubicacion, lat, lng) {
  */
 function actualizarDireccionEnSegundoPlano(lat, lng) {
   geocodificarInverso(lat, lng)
-    .then((texto) => {
-      if (!texto) return;
+    .then((r) => {
+      if (!r) return; // frenado por el intervalo minimo; ya se reintentara
       const db = loadDb();
-      db.senior.ubicacion.direccion = texto;
+      db.senior.ubicacion.direccion = r.texto;
       db.senior.ubicacion.direccionLat = lat;
       db.senior.ubicacion.direccionLng = lng;
       db.senior.ubicacion.direccionEn = new Date().toISOString();
       db.senior.ubicacion.direccionFallo = null;
       saveDb(db);
-      console.log(`[ubicacion] Direccion resuelta: ${texto}`);
+      console.log(`[ubicacion] Direccion (${r.proveedor}): ${r.texto}`);
     })
     .catch((err) => {
       // Se conserva la ultima direccion conocida. Que no se sepa la

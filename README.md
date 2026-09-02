@@ -145,7 +145,8 @@ esquemático simple en su lugar: nunca se queda con un hueco vacío.
 Debajo del mapa, el cuidador ve la última ubicación **escrita como una
 dirección** ("Avenida Carrera 50, Localidad Teusaquillo, Bogotá") y a qué
 hora se actualizó. Tampoco pide clave ni tarjeta: la traduce el servidor
-con **Nominatim**, el servicio de OpenStreetMap.
+con **Photon**, un servicio sobre datos de OpenStreetMap, y si falla lo
+reintenta con **Nominatim**.
 
 Para no abusar de un servicio gratuito, sólo se consulta cuando el adulto
 mayor se movió más de 40 m desde la última vez. Si el servicio falla o
