@@ -795,7 +795,14 @@ async function geocodificarInverso(lat, lng) {
     signal: AbortSignal.timeout(GEOCODIFICACION.msTimeout),
   });
 
-  if (!res.ok) throw new Error("Nominatim respondio " + res.status);
+  if (!res.ok) {
+    // El cuerpo del error dice mucho: Nominatim contesta 403 con un
+    // texto explicando el motivo cuando bloquea a quien llama.
+    const detalle = await res.text().catch(() => "");
+    throw new Error(
+      `Nominatim respondio ${res.status}: ${detalle.slice(0, 200)}`
+    );
+  }
   return armarDireccion(await res.json());
 }
 
@@ -825,6 +832,7 @@ function actualizarDireccionEnSegundoPlano(lat, lng) {
       db.senior.ubicacion.direccionLat = lat;
       db.senior.ubicacion.direccionLng = lng;
       db.senior.ubicacion.direccionEn = new Date().toISOString();
+      db.senior.ubicacion.direccionFallo = null;
       saveDb(db);
       console.log(`[ubicacion] Direccion resuelta: ${texto}`);
     })
@@ -832,6 +840,18 @@ function actualizarDireccionEnSegundoPlano(lat, lng) {
       // Se conserva la ultima direccion conocida. Que no se sepa la
       // calle no puede impedir que se sepa donde esta la persona.
       console.error("[ubicacion] No se pudo resolver la direccion:", err.message);
+      // El motivo se guarda para poder diagnosticarlo sin entrar a los
+      // logs del servidor: desde fuera solo se ve "Buscando la
+      // direccion..." y eso no dice si fallo la red, el servicio o el
+      // formato de la respuesta.
+      try {
+        const db = loadDb();
+        db.senior.ubicacion.direccionFallo = {
+          motivo: String(err.message).slice(0, 300),
+          cuando: new Date().toISOString(),
+        };
+        saveDb(db);
+      } catch (_) {}
     });
 }
 
