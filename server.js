@@ -703,6 +703,138 @@ function evaluarUbicacion(db, { lat, lng, precision }) {
   };
 }
 
+// --- Direccion en texto (geocodificacion inversa) -------------------------
+//
+// Unas coordenadas no le dicen nada a nadie. "Calle 181 #13-54" si. Esto
+// convierte lo uno en lo otro usando Nominatim, el geocodificador de
+// OpenStreetMap: gratuito, sin clave y sin tarjeta, igual que las
+// teselas del mapa.
+//
+// ── POR QUE EN EL SERVIDOR Y NO EN EL NAVEGADOR ────────────────────
+//   1. Nominatim exige un User-Agent que identifique la aplicacion, y
+//      un navegador no puede fijar esa cabecera.
+//   2. Una sola consulta sirve para todos los cuidadores que miren.
+//   3. El limite de peticiones se controla en un solo sitio.
+//
+// ── RESPETAR EL SERVICIO ──────────────────────────────────────────
+// Nominatim es un servicio comunitario gratuito y su politica de uso
+// pide como maximo una peticion por segundo. Consultarlo en cada
+// lectura (cada 10 s por telefono) seria abusar sin necesidad, asi que
+// hay dos frenos:
+//   · Solo se vuelve a preguntar si la persona se movio de verdad
+//     (mas de 40 m desde la ultima direccion conocida). Quien esta
+//     sentado en su casa no genera ni una peticion.
+//   · Un intervalo minimo entre peticiones, por si varios titulares
+//     reportan a la vez.
+//
+// Si Nominatim falla o tarda, NO pasa nada: se conserva la ultima
+// direccion conocida y la ubicacion sigue funcionando igual. Una
+// direccion bonita nunca puede costar una alerta.
+
+const GEOCODIFICACION = {
+  url: "https://nominatim.openstreetmap.org/reverse",
+  // La politica de Nominatim exige identificar la aplicacion.
+  userAgent:
+    "ConectaSenior/1.0 (https://conecta-senior-app.onrender.com; contacto@conectasenior.com.co)",
+  metrosParaRepetir: 40,
+  msEntrePeticiones: 1500,
+  msTimeout: 6000,
+};
+
+let ultimaPeticionGeo = 0;
+
+/**
+ * Arma una direccion corta y legible a partir de la respuesta de
+ * Nominatim. Se prefiere "via #numero, barrio, ciudad" porque es como
+ * se dicen las direcciones en Colombia; el display_name completo trae
+ * pais, codigo postal y region, que sobran en una pantalla de movil.
+ */
+function armarDireccion(datos) {
+  if (!datos) return null;
+  const a = datos.address || {};
+
+  const via = a.road || a.pedestrian || a.footway || a.residential || null;
+  const numero = a.house_number || null;
+
+  const partes = [];
+  if (via) partes.push(numero ? `${via} #${numero}` : via);
+
+  // `suburb` antes que `neighbourhood`: en Bogota, neighbourhood suele
+  // traer ruido administrativo ("UPZs de Bogota") mientras que suburb da
+  // algo que la gente reconoce ("Localidad Suba").
+  const barrio = a.suburb || a.neighbourhood || a.quarter || null;
+  if (barrio && barrio !== via) partes.push(barrio);
+
+  // OSM guarda la capital como "Bogota ciudad", que en pantalla suena raro.
+  // Se le quita ese apendice para que se lea como lo diria cualquiera.
+  let ciudad = a.city || a.town || a.village || a.municipality || null;
+  if (ciudad) ciudad = ciudad.replace(/\s+ciudad$/i, "").trim();
+  if (ciudad) partes.push(ciudad);
+
+  if (partes.length) return partes.join(", ");
+
+  // Sin calle reconocida (un descampado, una via sin nombre): mejor la
+  // descripcion larga recortada que dejarlo vacio.
+  return datos.display_name ? String(datos.display_name).slice(0, 120) : null;
+}
+
+async function geocodificarInverso(lat, lng) {
+  const ahora = Date.now();
+  if (ahora - ultimaPeticionGeo < GEOCODIFICACION.msEntrePeticiones) return null;
+  ultimaPeticionGeo = ahora;
+
+  const url =
+    `${GEOCODIFICACION.url}?format=jsonv2&lat=${lat}&lon=${lng}` +
+    `&zoom=18&addressdetails=1&accept-language=es`;
+
+  const res = await fetch(url, {
+    headers: {
+      "User-Agent": GEOCODIFICACION.userAgent,
+      Accept: "application/json",
+    },
+    signal: AbortSignal.timeout(GEOCODIFICACION.msTimeout),
+  });
+
+  if (!res.ok) throw new Error("Nominatim respondio " + res.status);
+  return armarDireccion(await res.json());
+}
+
+/** ¿Hace falta volver a preguntar la direccion para estas coordenadas? */
+function necesitaDireccion(ubicacion, lat, lng) {
+  if (!ubicacion.direccionLat || !ubicacion.direccionLng) return true;
+  const movido = distanciaMetros(
+    ubicacion.direccionLat,
+    ubicacion.direccionLng,
+    lat,
+    lng
+  );
+  return movido > GEOCODIFICACION.metrosParaRepetir;
+}
+
+/**
+ * Pide la direccion y la guarda, sin bloquear la respuesta al telefono.
+ * Se vuelve a leer la base antes de escribir porque entre la peticion y
+ * la respuesta pueden haber entrado lecturas nuevas.
+ */
+function actualizarDireccionEnSegundoPlano(lat, lng) {
+  geocodificarInverso(lat, lng)
+    .then((texto) => {
+      if (!texto) return;
+      const db = loadDb();
+      db.senior.ubicacion.direccion = texto;
+      db.senior.ubicacion.direccionLat = lat;
+      db.senior.ubicacion.direccionLng = lng;
+      db.senior.ubicacion.direccionEn = new Date().toISOString();
+      saveDb(db);
+      console.log(`[ubicacion] Direccion resuelta: ${texto}`);
+    })
+    .catch((err) => {
+      // Se conserva la ultima direccion conocida. Que no se sepa la
+      // calle no puede impedir que se sepa donde esta la persona.
+      console.error("[ubicacion] No se pudo resolver la direccion:", err.message);
+    });
+}
+
 // OJO: los cuatro endpoints que siguen son los unicos SIN autenticacion.
 // Es a proposito, para que el simulador funcione en demos sin tener que
 // iniciar sesion. Antes de conectar datos reales hay que protegerlos: el
@@ -751,8 +883,14 @@ app.post("/api/ubicacion", (req, res) => {
     if (esGps) {
       // La direccion del seed es inventada; dejarla puesta junto a unas
       // coordenadas reales haria creer que la persona esta en una calle
-      // donde no esta.
-      db.senior.ubicacion.direccion = "Ubicación compartida en vivo";
+      // donde no esta. Se pone un texto neutro hasta que llegue la real.
+      if (necesitaDireccion(db.senior.ubicacion, lat, lng)) {
+        if (!db.senior.ubicacion.direccionLat) {
+          db.senior.ubicacion.direccion = "Buscando la dirección…";
+        }
+        // Sin await: la respuesta al telefono no espera a Nominatim.
+        actualizarDireccionEnSegundoPlano(lat, lng);
+      }
     }
   }
 
@@ -808,6 +946,11 @@ app.post("/api/simulador/reiniciar", (req, res) => {
   db.senior.ubicacion.direccion = JSON.parse(
     fs.readFileSync(SEED_PATH, "utf-8")
   ).senior.ubicacion.direccion;
+  // Y la direccion resuelta, o la siguiente lectura no volveria a
+  // preguntarla por creer que ya la tiene.
+  db.senior.ubicacion.direccionLat = null;
+  db.senior.ubicacion.direccionLng = null;
+  db.senior.ubicacion.direccionEn = null;
   db.alertas = db.alertas.filter((a) => a.tipo !== "zona");
   db.senior.status = db.alertas.some((a) => a.estado === "pendiente")
     ? "alerta"

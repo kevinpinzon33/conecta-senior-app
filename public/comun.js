@@ -142,6 +142,34 @@ function fmtFecha(fecha) {
   });
 }
 
+// La hora del reloj, no "hace 3 minutos". El cuidador necesita las dos
+// cosas: cuanto hace (para saber si el dato esta fresco) y a que hora
+// exacta (para contarselo a alguien o cotejarlo con algo).
+function fmtHoraReloj(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleTimeString("es-CO", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+}
+
+// Si la lectura no es de hoy, la hora sola confunde: "8:15 a. m." puede
+// ser de ayer. En ese caso se antepone el dia.
+function fmtCuando(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const hoy = new Date();
+  const mismoDia =
+    d.getDate() === hoy.getDate() &&
+    d.getMonth() === hoy.getMonth() &&
+    d.getFullYear() === hoy.getFullYear();
+  const hora = fmtHoraReloj(iso);
+  if (mismoDia) return hora;
+  return `${d.toLocaleDateString("es-CO", { day: "numeric", month: "short" })}, ${hora}`;
+}
+
 function timeAgo(iso) {
   const diffMs = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diffMs / 60000);

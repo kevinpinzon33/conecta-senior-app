@@ -95,8 +95,9 @@ misma pantalla de login, así que no hay que memorizarlos):
    en la pantalla **Hoy** toca **"Compartir mi ubicación"**. Acepta el
    permiso que pide el navegador.
 2. En el otro teléfono, entra como `daniela` / `daniela123`. En
-   **Inicio** verás **EN VIVO**, la posición real, la precisión del GPS
-   y un enlace para abrirla en el mapa.
+   **Inicio** verás **EN VIVO**, la dirección en texto de dónde está,
+   a qué hora se actualizó, la precisión del GPS y un enlace para
+   abrirla en el mapa.
 
 > **Solo funciona con la app abierta y en pantalla.** Al bloquear el
 > teléfono o cambiar de app, el sistema congela la página y deja de
@@ -138,6 +139,24 @@ conviene restringir la clave por referente HTTP a tu dominio.
 
 Si el mapa no carga (sin conexión, o el CDN caído), la app dibuja un mapa
 esquemático simple en su lugar: nunca se queda con un hueco vacío.
+
+## 3 ter. La dirección en texto
+
+Debajo del mapa, el cuidador ve la última ubicación **escrita como una
+dirección** ("Avenida Carrera 50, Localidad Teusaquillo, Bogotá") y a qué
+hora se actualizó. Tampoco pide clave ni tarjeta: la traduce el servidor
+con **Nominatim**, el servicio de OpenStreetMap.
+
+Para no abusar de un servicio gratuito, sólo se consulta cuando el adulto
+mayor se movió más de 40 m desde la última vez. Si el servicio falla o
+tarda, se conserva la última dirección conocida.
+
+Dos cosas que conviene saber:
+
+- OpenStreetMap **rara vez tiene el número de la placa en Colombia**, así
+  que normalmente verás la calle sin número. Cuando el dato existe, se
+  muestra ("Calle 163B #24").
+- El simulador no consulta direcciones: sólo las lecturas de GPS reales.
 
 ## 4. Subirlo a internet gratis (para que NO dependa de tu PC)
 

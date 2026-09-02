@@ -83,7 +83,8 @@ function renderMayorHoy() {
         </div>
       </div>
       <p class="ubicacion-mayor-hora">
-        ${ICONS.clock} Actualizada ${timeAgo(s.ubicacion.actualizadoEn)}
+        ${ICONS.clock} Actualizada a las ${esc(fmtCuando(s.ubicacion.actualizadoEn))}
+        · ${timeAgo(s.ubicacion.actualizadoEn)}
       </p>
     </div>
 

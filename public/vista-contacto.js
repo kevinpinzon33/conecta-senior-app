@@ -191,13 +191,19 @@ function renderInicio() {
             s.status === "alerta" ? "Alerta activa" : "Dentro de la zona segura"
           }</span>
           <span class="time">${
-            enVivo(s) ? '<span class="punto-vivo"></span>EN VIVO · ' : ""
-          }${ICONS.clock} ${timeAgo(s.ubicacion.actualizadoEn)}</span>
+            enVivo(s)
+              ? '<span class="punto-vivo"></span>EN VIVO'
+              : `${ICONS.clock} dato de ejemplo`
+          }</span>
         </div>
         <div class="address-block">
           ${ICONS.pin}
           <div>
-            <p>${esc(s.ubicacion.direccion)}</p>
+            <p class="direccion">${esc(s.ubicacion.direccion)}</p>
+            <p class="actualizada">
+              Actualizada a las <b>${esc(fmtCuando(s.ubicacion.actualizadoEn))}</b>
+              · ${timeAgo(s.ubicacion.actualizadoEn)}
+            </p>
             <p class="coords">${s.ubicacion.lat.toFixed(5)}, ${s.ubicacion.lng.toFixed(5)}${
               enVivo(s) && s.ubicacion.precision
                 ? ` · ±${s.ubicacion.precision} m`
