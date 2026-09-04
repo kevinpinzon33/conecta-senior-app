@@ -104,10 +104,11 @@ misma pantalla de login, así que no hay que memorizarlos):
 > enviar. Es una limitación del navegador, no un fallo: reportar en
 > segundo plano exige una app nativa. La propia pantalla lo avisa.
 
-La zona segura de los datos de ejemplo está en Ciudad de México, así que
-desde otro lugar el titular saldrá "fuera" enseguida. Para probar la
-geocerca donde estés, mueve el centro y el radio desde
-`/simulador.html`.
+La zona segura de los datos de ejemplo está en la **Calle 181 con
+Carrera 13, Usaquén (Bogotá)**, con 300 m de radio. Desde más lejos de
+ahí el titular saldrá "fuera" enseguida, que es justo lo que se quiere
+ver al probar la alerta. Para probar la geocerca donde estés, mueve el
+centro y el radio desde `/simulador.html`.
 
 ### Simulador de zona segura
 

@@ -31,14 +31,14 @@
     "alergias": "Penicilina",
     "status": "presente",
     "ubicacion": {
-      "direccion": "Av. Reforma 214, Col. Roma Norte",
-      "lat": 19.418,
-      "lng": -99.162,
+      "direccion": "Calle 181 #13-54, San Antonio Noroccidental, Bogotá",
+      "lat": 4.75793,
+      "lng": -74.03965,
       "actualizadoEn": "2026-08-03T15:12:00.000Z"
     },
     "zonaSegura": {
-      "lat": 19.418,
-      "lng": -99.162,
+      "lat": 4.75793,
+      "lng": -74.03965,
       "radioM": 300
     },
     "seguimiento": {
@@ -87,7 +87,7 @@
       "tipo": "zona",
       "titulo": "Salio de la zona segura",
       "detalle": "Claudia salio del perimetro configurado",
-      "lugar": "Calle Orizaba y Alvaro Obregon",
+      "lugar": "Calle 181 con Carrera 13",
       "creadoEn": "2026-08-02T11:03:00.000Z",
       "estado": "atendida",
       "whatsappEnviado": true
@@ -97,7 +97,7 @@
       "tipo": "qr",
       "titulo": "Pulsera escaneada",
       "detalle": "Un desconocido escaneo el codigo QR de Claudia",
-      "lugar": "Farmacia San Pablo, Roma Norte",
+      "lugar": "Droguería de la Calle 183, Usaquén",
       "creadoEn": "2026-08-03T15:12:00.000Z",
       "estado": "atendida",
       "whatsappEnviado": true
@@ -119,7 +119,7 @@
       "id": 2,
       "tipo": "cita",
       "titulo": "Cita con el cardiologo",
-      "detalle": "Clinica Roma, consultorio 304",
+      "detalle": "Centro médico, consultorio 304",
       "hora": "10:00",
       "hecho": false,
       "creadoEn": "2026-08-04T12:00:00.000Z",
