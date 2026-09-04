@@ -1,21 +1,21 @@
 {
-  "_comentario": "Datos de ejemplo INVENTADOS. Los nombres de campo siguen los del backend real (proyecto conecta-senior): contactos usan relacion/telefonoPrincipal/prioridad y medicamentos usa dosis/frecuencia/horario/viaAdministracion, en camelCase por ser JSON. Asi el mapeo a las tablas MySQL es 1:1. Las claves van en texto plano solo porque son usuarios de prueba.",
+  "_comentario": "Datos de ejemplo INVENTADOS, salvo el telefono de Kevin Pinzon, que es real y lo pidio el usuario para las pruebas. Los nombres de campo siguen los del backend real (proyecto conecta-senior): contactos usan relacion/telefonoPrincipal/prioridad y medicamentos usa dosis/frecuencia/horario/viaAdministracion, en camelCase por ser JSON. Asi el mapeo a las tablas MySQL es 1:1. Las claves van en texto plano solo porque son usuarios de prueba.",
   "usuarios": [
     {
       "id": 1,
-      "usuario": "rosa",
-      "clave": "rosa123",
+      "usuario": "claudia",
+      "clave": "claudia123",
       "rol": "adulto_mayor",
-      "nombre": "Rosa Elena Vidal",
+      "nombre": "Claudia Castillo",
       "seniorId": 1,
       "contactoId": null
     },
     {
       "id": 2,
-      "usuario": "daniela",
-      "clave": "daniela123",
+      "usuario": "kevin",
+      "clave": "kevin123",
       "rol": "contacto_emergencia",
-      "nombre": "Daniela Vidal",
+      "nombre": "Kevin Pinzón",
       "seniorId": 1,
       "contactoId": 1
     }
@@ -23,7 +23,7 @@
   "sesiones": [],
   "senior": {
     "id": 1,
-    "nombre": "Rosa Elena Vidal",
+    "nombre": "Claudia Castillo",
     "edad": 78,
     "pulseraId": "CS-00412",
     "tipoSangre": "O positivo",
@@ -51,23 +51,23 @@
   "contactos": [
     {
       "id": 1,
-      "nombre": "Daniela Vidal",
-      "relacion": "Hija",
-      "telefonoPrincipal": "+52 55 1234 5678",
+      "nombre": "Kevin Pinzón",
+      "relacion": "Hijo",
+      "telefonoPrincipal": "+57 320 388 3602",
       "prioridad": 1
     },
     {
       "id": 2,
-      "nombre": "Marco Vidal",
+      "nombre": "Marco Castillo",
       "relacion": "Hijo",
-      "telefonoPrincipal": "+52 55 8765 4321",
+      "telefonoPrincipal": "+57 320 123 4567",
       "prioridad": 2
     },
     {
       "id": 3,
       "nombre": "Elena Torres",
       "relacion": "Cuidadora",
-      "telefonoPrincipal": "+52 55 2222 3333",
+      "telefonoPrincipal": "+57 320 765 4321",
       "prioridad": 3
     }
   ],
@@ -86,7 +86,7 @@
       "id": 3,
       "tipo": "zona",
       "titulo": "Salio de la zona segura",
-      "detalle": "Rosa Elena salio del perimetro configurado",
+      "detalle": "Claudia salio del perimetro configurado",
       "lugar": "Calle Orizaba y Alvaro Obregon",
       "creadoEn": "2026-08-02T11:03:00.000Z",
       "estado": "atendida",
@@ -96,7 +96,7 @@
       "id": 1,
       "tipo": "qr",
       "titulo": "Pulsera escaneada",
-      "detalle": "Un desconocido escaneo el codigo QR de Rosa Elena",
+      "detalle": "Un desconocido escaneo el codigo QR de Claudia",
       "lugar": "Farmacia San Pablo, Roma Norte",
       "creadoEn": "2026-08-03T15:12:00.000Z",
       "estado": "atendida",

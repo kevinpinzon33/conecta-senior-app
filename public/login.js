@@ -41,13 +41,13 @@ function mostrarLogin(mensaje = "") {
            Esta aqui solo para que el equipo pueda probar los dos roles. -->
       <div class="login-demo">
         <p class="login-demo-titulo">Usuarios de prueba</p>
-        <button class="login-demo-fila" data-usuario="rosa" data-clave="rosa123">
+        <button class="login-demo-fila" data-usuario="claudia" data-clave="claudia123">
           <span class="rol">Adulto mayor</span>
-          <span class="cred">rosa / rosa123</span>
+          <span class="cred">claudia / claudia123</span>
         </button>
-        <button class="login-demo-fila" data-usuario="daniela" data-clave="daniela123">
+        <button class="login-demo-fila" data-usuario="kevin" data-clave="kevin123">
           <span class="rol">Contacto de emergencia</span>
-          <span class="cred">daniela / daniela123</span>
+          <span class="cred">kevin / kevin123</span>
         </button>
       </div>
     </div>

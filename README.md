@@ -65,10 +65,10 @@ misma pantalla de login, así que no hay que memorizarlos):
 
 | Usuario | Contraseña | Qué ve |
 |---|---|---|
-| `rosa` | `rosa123` | La vista del **adulto mayor**: su estado, sus recordatorios y sus contactos, con letra más grande |
-| `daniela` | `daniela123` | La vista del **contacto de emergencia**: mapa, alertas y administración de recordatorios |
+| `claudia` | `claudia123` | La vista del **adulto mayor**: su estado, sus recordatorios y sus contactos, con letra más grande |
+| `kevin` | `kevin123` | La vista del **contacto de emergencia**: mapa, alertas y administración de recordatorios |
 
-- **Inicio**: ubicación simulada de Rosa Elena, estado, radio de zona
+- **Inicio**: ubicación simulada de Claudia, estado, radio de zona
   segura, botón "Llamar" (marca al contacto principal) y "Marcar visto".
 - **Recordatorios** (abajo en Inicio): toca **"+ Agregar"** para crear
   uno (medicamento, cita u otro, con **fecha** y hora opcionales — la
@@ -91,10 +91,10 @@ misma pantalla de login, así que no hay que memorizarlos):
 
 ### Probar con dos teléfonos (ubicación en vivo)
 
-1. En el teléfono del **adulto mayor**, entra como `rosa` / `rosa123` y
+1. En el teléfono del **adulto mayor**, entra como `claudia` / `claudia123` y
    en la pantalla **Hoy** toca **"Compartir mi ubicación"**. Acepta el
    permiso que pide el navegador.
-2. En el otro teléfono, entra como `daniela` / `daniela123`. En
+2. En el otro teléfono, entra como `kevin` / `kevin123`. En
    **Inicio** verás **EN VIVO**, la dirección en texto de dónde está,
    a qué hora se actualizó, la precisión del GPS y un enlace para
    abrirla en el mapa.
