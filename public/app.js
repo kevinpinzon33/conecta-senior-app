@@ -108,6 +108,9 @@ async function refreshAll() {
   state.citas = citas;
   render();
   avisarAlertasNuevas();
+  if (esContacto() && typeof sincronizarZonaMovil === "function") {
+    sincronizarZonaMovil().catch(() => {});
+  }
 }
 
 // --- Aviso de alerta nueva (solo el cuidador) ----------------------------
@@ -295,14 +298,16 @@ async function iniciarSesionEnLaApp() {
 
 async function cerrarSesion() {
   clearInterval(temporizadorRefresco);
+  // Dejar de compartir ANTES de cerrar la sesion: el aviso al servidor
+  // necesita el token, y la ubicacion es de quien inicio sesion, no del
+  // telefono.
+  if (typeof Ubicacion !== "undefined" && Ubicacion.activo) await detenerCompartir();
+  if (typeof ZonaMovil !== "undefined") detenerZonaMovil();
   try {
     await api("/auth/logout", { method: "POST" });
   } catch (_) {
     // Si el servidor ya no reconoce la sesion da igual: igual salimos.
   }
-  // Dejar de compartir al salir: la ubicacion es de quien inicio sesion,
-  // no del telefono.
-  if (typeof Ubicacion !== "undefined" && Ubicacion.activo) detenerCompartir();
   olvidarSesion();
   document.body.classList.remove("vista-mayor");
   mostrarLogin();

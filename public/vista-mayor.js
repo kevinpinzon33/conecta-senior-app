@@ -14,6 +14,8 @@ const TITULOS_PARA_MAYOR = {
   "Salió de la zona segura": "Saliste de tu zona segura",
   "Volvió a la zona segura": "Volviste a tu zona segura",
   "Pulsera conectada": "Tu pulsera quedó conectada",
+  "Se perdió su ubicación": "Tu teléfono dejó de enviar tu ubicación",
+  "Volvió a enviar su ubicación": "Tu teléfono volvió a enviar tu ubicación",
 };
 
 function tituloParaMayor(alerta) {

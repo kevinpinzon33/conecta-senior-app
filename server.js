@@ -163,12 +163,77 @@ function vistaSenior(db, adultoId) {
     revisadoEn: v.mon.revisadoEn,
     ubicacion: v.mon.ubicacion,
     seguimiento: v.mon.seguimiento,
-    zonaSegura: { lat: v.zona.lat, lng: v.zona.lng, radioM: v.zona.radioM },
+    senal: estadoSenal(v.mon),
+    zonaSegura: {
+      lat: v.zona.lat,
+      lng: v.zona.lng,
+      radioM: v.zona.radioM,
+      modo: v.zona.modo || "fija",
+      direccion: v.zona.direccion || "",
+      cuidadorId: v.zona.cuidadorId || null,
+      centroEn: v.zona.centroEn || null,
+    },
   };
 }
 
 function hayAlertasPendientes(db, adultoId) {
   return deAdulto(db.alertas, adultoId).some((a) => a.estado === "pendiente");
+}
+
+// --- Señal del telefono del adulto mayor ---------------------------------
+//
+// Lo que fallo en la primera prueba de campo (2026-10-12): el telefono de
+// Claudia dejo de mandar su posicion (pantalla bloqueada o el GPS callado)
+// y nadie se entero. El servidor no puede detectar una salida de zona sin
+// lecturas, y el panel del cuidador seguia diciendo "EN VIVO" sobre una
+// posicion vieja. Un silencio asi es tan importante como una salida.
+//
+// Regla: si el telefono esta compartiendo (no pulso "Dejar de compartir")
+// y lleva mas de SENAL_PERDIDA_MS sin reportar nada, hay alerta. El
+// telefono manda un latido cada 10 s aunque la persona no se mueva (ver
+// compartir-ubicacion.js), asi que 3 minutos de silencio no son normales.
+
+// Se puede bajar con la variable de entorno para las pruebas automaticas.
+const SENAL_PERDIDA_MS = Number(process.env.SENAL_PERDIDA_MS) || 3 * 60 * 1000;
+
+function estadoSenal(mon) {
+  const u = mon.ubicacion;
+  if (u.fuente !== "gps") return { estado: "ejemplo" };
+  if (!mon.compartiendo) return { estado: "apagada", ultimoReporte: mon.ultimoReporte || u.actualizadoEn };
+  const ultimo = mon.ultimoReporte || u.actualizadoEn;
+  const msSin = Date.now() - new Date(ultimo).getTime();
+  return {
+    estado: msSin > SENAL_PERDIDA_MS ? "perdida" : "en_vivo",
+    ultimoReporte: ultimo,
+  };
+}
+
+/**
+ * Crea la alerta de señal perdida, una sola vez por cada silencio. Se
+ * llama al consultar /api/senior y /api/alertas, que el cuidador pide
+ * cada 10 s: no hace falta un temporizador en el servidor (que en el plan
+ * gratuito de Render se duerme igual).
+ */
+function revisarSenal(db, adultoId) {
+  const v = vigilancia(db, adultoId);
+  if (!v) return false;
+  if (estadoSenal(v.mon).estado !== "perdida" || v.mon.senalPerdidaAlertada) return false;
+
+  const nombre = v.adulto.nombreCompleto;
+  db.alertas.push({
+    id: siguienteId(db.alertas),
+    adultoMayorId: adultoId,
+    tipo: "senal",
+    titulo: "Se perdió su ubicación",
+    detalle: `El teléfono de ${nombre} dejó de enviar su ubicación. Puede que lo haya bloqueado o cerrado la app. Llámala para confirmar que está bien.`,
+    lugar: v.mon.ubicacion.direccion || `${v.mon.ubicacion.lat}, ${v.mon.ubicacion.lng}`,
+    creadoEn: new Date().toISOString(),
+    estado: "pendiente",
+    whatsappEnviado: false,
+  });
+  v.mon.senalPerdidaAlertada = true;
+  v.mon.status = "alerta";
+  return true;
 }
 
 function saveDb(db) {
@@ -406,6 +471,7 @@ app.get("/api/config", requiereAuth, (req, res) => {
 
 app.get("/api/senior", requiereAuth, requiereAdulto, (req, res) => {
   const db = loadDb();
+  revisarSenal(db, req.adultoId);
   const vista = vistaSenior(db, req.adultoId);
   if (!vista) {
     return res.status(403).json({ error: "No tienes acceso a esta persona" });
@@ -426,6 +492,7 @@ app.get("/api/contactos", requiereAuth, requiereAdulto, (req, res) => {
 
 app.get("/api/alertas", requiereAuth, requiereAdulto, (req, res) => {
   const db = loadDb();
+  if (revisarSenal(db, req.adultoId)) saveDb(db);
   const ordenadas = deAdulto(db.alertas, req.adultoId).sort(
     (a, b) => new Date(b.creadoEn) - new Date(a.creadoEn)
   );
@@ -497,55 +564,169 @@ app.post(
   }
 );
 
-// El cuidador define la zona segura desde su propio telefono. Hasta ahora
-// solo se podia mover desde el simulador, asi que una prueba real exigia
-// abrir una herramienta de demo o editar el seed.
+// ── Zona segura: la define el familiar desde su telefono ──────────────
 //
-// Al moverla se reinicia el conteo de la geocerca: las lecturas
-// acumuladas se midieron contra la zona vieja y ya no dicen nada. Si la
-// persona queda fuera de la zona nueva, las siguientes lecturas lo
-// confirman y saltara la alerta como siempre, sin atajos.
+// Dos modos (pedido del usuario tras la primera prueba de campo):
+//
+//   · "fija"     : centro en una DIRECCION (la casa, un centro de dia).
+//                  El familiar la busca y confirma el punto en un mapa.
+//   · "cuidador" : la zona SIGUE al familiar. Sirve para salir juntos
+//                  (un centro comercial, una cita): avisa si la persona
+//                  se aleja mas de X metros de el. Su telefono manda su
+//                  posicion a /api/senior/zona-segura/centro.
+//
+// Se descarto "donde esta el adulto mayor": como la persona se mueve, la
+// zona quedaria donde estaba en ese instante, que no significa nada.
+//
+// Al cambiar de modo o de centro se reinicia el conteo de la geocerca:
+// las lecturas acumuladas se midieron contra la zona vieja. Si la persona
+// queda fuera, las siguientes lecturas lo confirman y salta la alerta
+// como siempre. En el modo "cuidador", cada nuevo centro NO reinicia
+// nada: es la misma zona moviendose.
+
+function esCoordenada(lat, lng) {
+  return (
+    typeof lat === "number" && typeof lng === "number" &&
+    lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180
+  );
+}
+
+function reiniciarConteo(db, adultoId, mon) {
+  const seg = mon.seguimiento;
+  seg.estaFuera = false;
+  seg.lecturasFuera = 0;
+  seg.lecturasDentro = 0;
+  mon.status = hayAlertasPendientes(db, adultoId) ? "alerta" : "presente";
+}
+
 app.post(
   "/api/senior/zona-segura",
   requiereAuth,
   requiereAdulto,
   requiereRol(...ROLES_CUIDADOR),
   (req, res) => {
-    const { lat, lng, radioM } = req.body || {};
+    const { modo, lat, lng, radioM, direccion } = req.body || {};
     const db = loadDb();
     const { zona, mon } = vigilancia(db, req.adultoId);
 
-    const hayCentro = typeof lat === "number" || typeof lng === "number";
-    if (hayCentro) {
-      if (
-        typeof lat !== "number" || typeof lng !== "number" ||
-        lat < -90 || lat > 90 || lng < -180 || lng > 180
-      ) {
-        return res.status(400).json({ error: "Coordenadas no válidas" });
-      }
-    }
     if (radioM != null && (typeof radioM !== "number" || radioM < 50 || radioM > 5000)) {
       return res.status(400).json({ error: "El radio debe estar entre 50 y 5000 m" });
     }
+    if (modo != null && !["fija", "cuidador"].includes(modo)) {
+      return res.status(400).json({ error: "Modo de zona no válido" });
+    }
+    if (!modo && (lat != null || lng != null)) {
+      return res.status(400).json({ error: "Indica el modo de la zona (fija o cuidador)" });
+    }
+    if (modo && !esCoordenada(lat, lng)) {
+      return res.status(400).json({ error: "Coordenadas no válidas" });
+    }
 
-    if (hayCentro) {
-      zona.lat = lat;
-      zona.lng = lng;
+    if (modo === "fija") {
+      Object.assign(zona, {
+        modo: "fija",
+        lat,
+        lng,
+        direccion: limpiarTexto(direccion, 200),
+        cuidadorId: null,
+        centroEn: new Date().toISOString(),
+      });
+    } else if (modo === "cuidador") {
+      Object.assign(zona, {
+        modo: "cuidador",
+        lat,
+        lng,
+        direccion: "",
+        cuidadorId: req.usuario.id,
+        centroEn: new Date().toISOString(),
+      });
     }
     if (radioM != null) zona.radioM = Math.round(radioM);
 
     // ultimaLectura se conserva: el guardia de velocidad mide como se
     // mueve la persona, y eso no cambia porque se mueva la zona.
-    const seg = mon.seguimiento;
-    seg.estaFuera = false;
-    seg.lecturasFuera = 0;
-    seg.lecturasDentro = 0;
-    mon.status = hayAlertasPendientes(db, req.adultoId) ? "alerta" : "presente";
-
+    reiniciarConteo(db, req.adultoId, mon);
     saveDb(db);
-    res.json({ lat: zona.lat, lng: zona.lng, radioM: zona.radioM });
+    res.json(vistaSenior(db, req.adultoId).zonaSegura);
   }
 );
+
+// El telefono del familiar, en el modo "cuidador", manda aqui su posicion
+// cada 10 s. Solo la acepta del familiar que activo el modo: si otro
+// familiar pudiera moverla, la zona saltaria entre dos personas.
+app.post(
+  "/api/senior/zona-segura/centro",
+  requiereAuth,
+  requiereAdulto,
+  requiereRol(...ROLES_CUIDADOR),
+  (req, res) => {
+    const { lat, lng, precision } = req.body || {};
+    if (!esCoordenada(lat, lng)) {
+      return res.status(400).json({ error: "Coordenadas no válidas" });
+    }
+    const db = loadDb();
+    const { zona } = vigilancia(db, req.adultoId);
+    if (zona.modo !== "cuidador" || zona.cuidadorId !== req.usuario.id) {
+      return res.status(409).json({ error: "La zona no está siguiendo a este teléfono" });
+    }
+    // Igual que con el adulto mayor: una lectura imprecisa moveria la
+    // zona decenas de metros sin motivo y podria fabricar una salida.
+    if (typeof precision === "number" && precision > GEOCERCA.precisionMaximaM) {
+      return res.json({ aceptada: false, motivo: `Precisión de ${Math.round(precision)} m` });
+    }
+    zona.lat = lat;
+    zona.lng = lng;
+    zona.centroEn = new Date().toISOString();
+    saveDb(db);
+    res.json({ aceptada: true });
+  }
+);
+
+// Buscar una direccion para la zona fija. Usa Photon (el mismo de la
+// direccion en texto), limitado a Colombia y sesgado hacia la zona
+// actual. OJO: con las direcciones de Bogota acierta poco ("Calle 181
+// 13-54" devolvio la Calle 44), por eso la pantalla SIEMPRE muestra el
+// punto en un mapa para que el familiar lo confirme o lo arrastre.
+const BBOX_COLOMBIA = "-79.1,-4.3,-66.8,12.5";
+
+app.get(
+  "/api/geocodificar",
+  requiereAuth,
+  requiereAdulto,
+  requiereRol(...ROLES_CUIDADOR),
+  async (req, res) => {
+    const q = limpiarTexto(req.query.q, 150);
+    if (q.length < 3) return res.status(400).json({ error: "Escribe una dirección" });
+    const db = loadDb();
+    const { zona } = vigilancia(db, req.adultoId);
+    const url =
+      `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=5` +
+      `&bbox=${BBOX_COLOMBIA}&lat=${zona.lat}&lon=${zona.lng}`;
+    try {
+      const datos = await pedirJson(url);
+      const resultados = (datos.features || []).map((f) => {
+        const p = f.properties || {};
+        const via = [p.street || (p.type === "street" ? p.name : ""), p.housenumber]
+          .filter(Boolean).join(" #");
+        const etiqueta = [
+          p.type !== "street" && p.name !== p.street ? p.name : "",
+          via,
+          p.locality || p.district,
+          p.city,
+        ].filter(Boolean).join(", ");
+        return {
+          etiqueta: etiqueta || p.name || q,
+          lat: f.geometry.coordinates[1],
+          lng: f.geometry.coordinates[0],
+        };
+      });
+      res.json(resultados);
+    } catch (err) {
+      res.status(502).json({ error: "No se pudo buscar la dirección. Marca el punto en el mapa." });
+    }
+  }
+);
+
 
 // --- Validaciones comunes ------------------------------------------------
 
@@ -1390,7 +1571,28 @@ app.post("/api/ubicacion", (req, res) => {
   }
 
   const resultado = evaluarUbicacion(db, adultoId, { lat, lng, precision });
-  const { zona, mon } = vigilancia(db, adultoId);
+  const { adulto, zona, mon } = vigilancia(db, adultoId);
+
+  // Cualquier reporte del telefono (aunque la lectura se descarte por
+  // imprecisa) demuestra que sigue vivo. Es lo que vigila revisarSenal().
+  if (usuario) {
+    mon.compartiendo = true;
+    mon.ultimoReporte = new Date().toISOString();
+    if (mon.senalPerdidaAlertada) {
+      mon.senalPerdidaAlertada = false;
+      db.alertas.push({
+        id: siguienteId(db.alertas),
+        adultoMayorId: adultoId,
+        tipo: "senal",
+        titulo: "Volvió a enviar su ubicación",
+        detalle: `El teléfono de ${adulto.nombreCompleto} vuelve a compartir su ubicación.`,
+        lugar: `${lat.toFixed(5)}, ${lng.toFixed(5)}`,
+        creadoEn: new Date().toISOString(),
+        estado: "atendida",
+        whatsappEnviado: false,
+      });
+    }
+  }
 
   // De donde vino la lectura. El panel del cuidador necesita distinguir
   // "esto es el GPS del telefono de mi mama, ahora mismo" de "esto es el
@@ -1421,6 +1623,24 @@ app.post("/api/ubicacion", (req, res) => {
     zonaSegura: { lat: zona.lat, lng: zona.lng, radioM: zona.radioM },
   });
 });
+
+// El adulto mayor pulso "Dejar de compartir" (o cerro sesion). Asi el
+// silencio que sigue es voluntario y no dispara la alerta de señal
+// perdida. El cuidador lo ve como "dejó de compartir".
+app.post(
+  "/api/ubicacion/detener",
+  requiereAuth,
+  requiereAdulto,
+  requiereRol("adulto_mayor"),
+  (req, res) => {
+    const db = loadDb();
+    const { mon } = vigilancia(db, req.adultoId);
+    mon.compartiendo = false;
+    mon.senalPerdidaAlertada = false;
+    saveDb(db);
+    res.json({ ok: true });
+  }
+);
 
 app.get("/api/zona-segura", (req, res) => {
   const db = loadDb();
@@ -1491,8 +1711,11 @@ app.post("/api/simulador/reiniciar", (req, res) => {
     direccionLng: null,
     direccionEn: null,
   };
+  mon.compartiendo = false;
+  mon.ultimoReporte = null;
+  mon.senalPerdidaAlertada = false;
   db.alertas = db.alertas.filter(
-    (a) => !(a.adultoMayorId === adultoId && a.tipo === "zona")
+    (a) => !(a.adultoMayorId === adultoId && (a.tipo === "zona" || a.tipo === "senal"))
   );
   mon.status = hayAlertasPendientes(db, adultoId) ? "alerta" : "presente";
   saveDb(db);

@@ -37,6 +37,8 @@ let primeraAceptada = true;
 const Ubicacion = {
   activo: false,
   watchId: null,
+  latidoId: null,
+  ultimaPos: null, // la ultima posicion que dio el GPS, enviada o no
   wakeLock: null,
   ultimoEnvio: 0,
   estado: "inactivo", // inactivo | buscando | compartiendo | error
@@ -80,8 +82,10 @@ function textoDelError(codigo) {
 
 async function enviarPosicion(pos) {
   const ahora = Date.now();
-  // La primera lectura se manda siempre; las siguientes, espaciadas.
-  if (Ubicacion.ultimoEnvio && ahora - Ubicacion.ultimoEnvio < MS_ENTRE_ENVIOS) {
+  // La primera lectura se manda siempre; las siguientes, espaciadas. El
+  // margen de 1 s es para que el latido (cada 10 s justos) no caiga un
+  // milisegundo antes y se descarte.
+  if (Ubicacion.ultimoEnvio && ahora - Ubicacion.ultimoEnvio < MS_ENTRE_ENVIOS - 1000) {
     return;
   }
   Ubicacion.ultimoEnvio = ahora;
@@ -135,7 +139,33 @@ async function enviarPosicion(pos) {
 }
 
 function alRecibirPosicion(pos) {
+  Ubicacion.ultimaPos = pos;
   enviarPosicion(pos);
+}
+
+// ── Latido ───────────────────────────────────────────────────────
+// En la primera prueba de campo (2026-10-12) el telefono dejo de
+// reportar y nadie se entero. Una causa: el watch solo avisa cuando la
+// posicion cambia, y las lecturas que llegaban antes de los 10 s se
+// descartaban; si despues el GPS se callaba, no salia nada mas.
+//
+// Ahora, cada 10 s se manda la ultima posicion aunque la persona no se
+// mueva. Si esa posicion ya tiene mas de 30 s, se pide una nueva. Asi el
+// servidor sabe que el telefono sigue vivo, y si deja de oirlo avisa al
+// cuidador (alerta "Se perdió su ubicación").
+function latido() {
+  if (!Ubicacion.activo) return;
+  const p = Ubicacion.ultimaPos;
+  if (p && Date.now() - p.timestamp < 30000) {
+    enviarPosicion(p);
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(alRecibirPosicion, alFallar, OPCIONES);
+}
+
+function arrancarLatido() {
+  clearInterval(Ubicacion.latidoId);
+  Ubicacion.latidoId = setInterval(latido, MS_ENTRE_ENVIOS);
 }
 
 function alFallar(err) {
@@ -205,10 +235,13 @@ function iniciarCompartir() {
   navigator.geolocation.getCurrentPosition(alRecibirPosicion, alFallar, OPCIONES);
   // 2) Y en paralelo el watch, que en iOS a veces es el único que responde.
   arrancarWatch();
+  arrancarLatido();
 
   pedirWakeLock();
 }
 
+// Devuelve la promesa del aviso al servidor, para que cerrar sesion
+// pueda esperarla antes de invalidar el token.
 function detenerCompartir() {
   Ubicacion.activo = false;
   localStorage.removeItem(CLAVE_COMPARTIR);
@@ -216,8 +249,14 @@ function detenerCompartir() {
     navigator.geolocation.clearWatch(Ubicacion.watchId);
     Ubicacion.watchId = null;
   }
+  clearInterval(Ubicacion.latidoId);
+  Ubicacion.latidoId = null;
+  Ubicacion.ultimaPos = null;
   soltarWakeLock();
   fijarEstado("inactivo", "");
+  // Que el servidor sepa que el silencio que sigue es voluntario: si no,
+  // a los 3 minutos le saltaria al cuidador "Se perdió su ubicación".
+  return api("/ubicacion/detener", { method: "POST" }).catch(() => {});
 }
 
 // iOS congela la geolocalización en segundo plano y el watch puede
@@ -252,5 +291,6 @@ async function reanudarSiProcede() {
   Ubicacion.activo = true;
   fijarEstado("buscando", "");
   arrancarWatch();
+  arrancarLatido();
   pedirWakeLock();
 }

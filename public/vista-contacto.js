@@ -378,11 +378,7 @@ function renderInicio() {
       <div class="map-info">
         <div class="map-info-row">
           ${pildoraZona(s)}
-          <span class="time">${
-            enVivo(s)
-              ? '<span class="punto-vivo"></span>EN VIVO'
-              : `${ICONS.clock} dato de ejemplo`
-          }</span>
+          ${etiquetaSenal(s)}
         </div>
         <div class="address-block">
           ${ICONS.pin}
@@ -399,6 +395,8 @@ function renderInicio() {
             }</p>
           </div>
         </div>
+        ${avisoSenal(s)}
+        ${infoZona(s)}
         <div class="map-meta">
           <button class="ajustar-zona" id="btnZona">
             Zona segura: ${s.zonaSegura.radioM} m · <b>Ajustar</b>
@@ -448,6 +446,15 @@ function renderInicio() {
   }
 
   document.getElementById("btnZona").onclick = abrirFormZona;
+  // Sin permiso de ubicacion, la zona que sigue al familiar necesita un
+  // toque para arrancar (iOS no deja pedirlo sin gesto).
+  const btnSeguir = document.getElementById("btnActivarZonaMovil");
+  if (btnSeguir) {
+    btnSeguir.onclick = () => {
+      iniciarZonaMovil();
+      setTimeout(render, 1500);
+    };
+  }
   document.getElementById("btnVisto").onclick = async () => {
     await api("/senior/marcar-visto", { method: "POST" });
     refreshAll();
@@ -507,25 +514,99 @@ function pildoraZona(s) {
   return `<span class="pill presente">${ICONS.check} Dentro de la zona segura</span>`;
 }
 
+// ── Señal del teléfono del adulto mayor ───────────────────────────
+// En la primera prueba de campo el telefono de Claudia dejo de enviar y
+// esta tarjeta siguio diciendo "EN VIVO". Ahora dice la verdad: en vivo,
+// sin señal (con cuanto hace), dejó de compartir, o dato de ejemplo.
+
+function etiquetaSenal(s) {
+  const senal = s.senal || { estado: "ejemplo" };
+  if (senal.estado === "en_vivo") {
+    return `<span class="time"><span class="punto-vivo"></span>EN VIVO</span>`;
+  }
+  if (senal.estado === "perdida") {
+    return `<span class="time sin-senal">${ICONS.warn} SIN SEÑAL</span>`;
+  }
+  if (senal.estado === "apagada") {
+    return `<span class="time">${ICONS.clock} no comparte</span>`;
+  }
+  return `<span class="time">${ICONS.clock} dato de ejemplo</span>`;
+}
+
+function avisoSenal(s) {
+  const senal = s.senal || {};
+  const nombre = esc(primerNombre(s.nombre));
+  if (senal.estado === "perdida") {
+    return `<p class="aviso-tarjeta alerta">${ICONS.warn}<span>El teléfono de ${nombre} no envía su ubicación desde las ${esc(
+      fmtCuando(senal.ultimoReporte)
+    )} (${esc(timeAgo(senal.ultimoReporte))}). Lo de abajo es su última posición conocida.</span></p>`;
+  }
+  if (senal.estado === "apagada") {
+    return `<p class="aviso-tarjeta">${ICONS.clock}<span>${nombre} dejó de compartir su ubicación ${esc(
+      timeAgo(senal.ultimoReporte)
+    )}.</span></p>`;
+  }
+  return "";
+}
+
+// Que dice la zona: centrada en una direccion, o siguiendo al familiar.
+function infoZona(s) {
+  const z = s.zonaSegura;
+  if (z.modo !== "cuidador") {
+    return z.direccion
+      ? `<p class="info-zona">${ICONS.pin}<span>Zona centrada en <b>${esc(z.direccion)}</b></span></p>`
+      : "";
+  }
+  if (z.cuidadorId !== state.usuario.id) {
+    return `<p class="info-zona">${ICONS.persona}<span>La zona sigue a otro familiar.</span></p>`;
+  }
+  if (ZonaMovil.activo && ZonaMovil.ultimaPos) {
+    return `<p class="info-zona">${ICONS.persona}<span>La zona te sigue: avisa si ${esc(
+      primerNombre(s.nombre)
+    )} se aleja más de ${z.radioM} m de ti. Mantén la app abierta. <span class="mono">±${Math.round(
+      ZonaMovil.ultimaPos.coords.accuracy
+    )} m</span></span></p>`;
+  }
+  return `<div class="info-zona alerta">${ICONS.warn}<span>${
+    ZonaMovil.error ||
+    `La zona debe seguirte, pero este teléfono no está enviando tu ubicación. Quedó donde estabas ${esc(
+      timeAgo(z.centroEn)
+    )}.`
+  }</span>
+    <button class="btn btn-primary" id="btnActivarZonaMovil">Activar mi ubicación</button></div>`;
+}
+
 // ── Zona segura ───────────────────────────────────────────────────
-// El cuidador la define desde su telefono. Para el centro hay tres
-// opciones: dejarlo, ponerlo donde esta la persona ahora (solo si su
-// ubicacion es en vivo, no el dato de ejemplo) o donde esta el propio
-// cuidador, que sirve para fijar "la casa" antes de que el adulto mayor
-// empiece a compartir.
+// El familiar la define desde su telefono. Los metros se eligen igual
+// que antes; el centro tiene dos opciones (pedido del usuario tras la
+// prueba de campo del 2026-10-12):
+//   · Establecer dirección: se busca la direccion y se CONFIRMA en un
+//     mapa, arrastrando el punto si hace falta. Los geocodificadores
+//     gratuitos ubican mal muchas direcciones de Bogota ("Calle 181
+//     13-54" devolvio la Calle 44), asi que el mapa manda, no la busqueda.
+//   · Donde estoy yo: la zona sigue al familiar mientras tenga la app
+//     abierta (ver zona-movil.js).
+// Se quito "Donde está Claudia": como ella camina, la zona quedaba donde
+// estaba en ese instante, que no significaba nada.
 
 const RADIOS_ZONA = [100, 200, 300, 500, 1000];
 
 function abrirFormZona() {
   const s = state.senior;
+  const z = s.zonaSegura;
   const nombre = primerNombre(s.nombre);
-  const radios = RADIOS_ZONA.includes(s.zonaSegura.radioM)
+  const radios = RADIOS_ZONA.includes(z.radioM)
     ? RADIOS_ZONA
-    : [...RADIOS_ZONA, s.zonaSegura.radioM].sort((a, b) => a - b);
+    : [...RADIOS_ZONA, z.radioM].sort((a, b) => a - b);
 
-  let radioElegido = s.zonaSegura.radioM;
-  let centroElegido = "igual";
+  let radioElegido = z.radioM;
+  let modo = z.modo === "cuidador" ? "cuidador" : "fija";
+  // El punto elegido para la zona fija. Arranca en el centro actual.
+  let punto = { lat: z.lat, lng: z.lng };
+  let direccionTexto = z.direccion || "";
   let miPosicion = null;
+  let miniMapa = null;
+  let pin = null;
 
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay";
@@ -545,16 +626,27 @@ function abrirFormZona() {
       </div>
 
       <label>Centro</label>
-      <div class="tipo-picker" id="zonaCentros">
-        <button type="button" data-centro="igual" class="activo">${ICONS.check}<span>Dejarlo</span></button>
-        <button type="button" data-centro="senior" ${enVivo(s) ? "" : "disabled"}>${ICONS.persona}<span>Donde está ${esc(nombre)}</span></button>
-        <button type="button" data-centro="yo">${ICONS.pin}<span>Donde estoy yo</span></button>
+      <div class="tipo-picker" id="zonaModos">
+        <button type="button" data-modo="fija">${ICONS.pin}<span>Establecer dirección</span></button>
+        <button type="button" data-modo="cuidador">${ICONS.persona}<span>Donde estoy yo</span></button>
       </div>
-      <p class="zona-nota" id="zonaNota">${
-        enVivo(s)
-          ? `Al guardar se reinicia la vigilancia. Si ${esc(nombre)} queda fuera, la alerta llega en menos de un minuto.`
-          : `“Donde está ${esc(nombre)}” se activa cuando comparta su ubicación desde su teléfono.`
-      }</p>
+
+      <div id="panelFija">
+        <div class="buscar-dir">
+          <input id="zonaDir" type="text" maxlength="150"
+                 placeholder="Calle 181 #13-54, Bogotá" value="${esc(direccionTexto)}" />
+          <button type="button" class="btn btn-secondary" id="zonaBuscar">Buscar</button>
+        </div>
+        <div class="dir-resultados" id="zonaResultados"></div>
+        <div class="mini-mapa" id="zonaMapa"></div>
+        <p class="zona-nota">Revisa el punto en el mapa. Si no es exacto, <b>arrástralo</b> o <b>toca el lugar correcto</b>.</p>
+      </div>
+
+      <div id="panelCuidador" hidden>
+        <p class="zona-nota" id="zonaNotaYo">La zona te seguirá mientras tengas la app abierta: si ${esc(
+          nombre
+        )} se aleja más del radio elegido de ti, te llega la alerta. Útil al salir juntos.</p>
+      </div>
 
       <p class="modal-error" id="zonaError" hidden></p>
 
@@ -566,9 +658,10 @@ function abrirFormZona() {
   `;
   document.body.appendChild(overlay);
 
-  const errorEl = overlay.querySelector("#zonaError");
-  const notaEl = overlay.querySelector("#zonaNota");
-  const btnGuardar = overlay.querySelector("#zonaGuardar");
+  const $ = (sel) => overlay.querySelector(sel);
+  const errorEl = $("#zonaError");
+  const btnGuardar = $("#zonaGuardar");
+  const resultadosEl = $("#zonaResultados");
 
   const mostrarError = (texto) => {
     errorEl.textContent = texto;
@@ -577,6 +670,7 @@ function abrirFormZona() {
 
   const cerrar = () => {
     document.removeEventListener("keydown", alPresionarTecla);
+    if (miniMapa) miniMapa.remove();
     overlay.remove();
   };
   function alPresionarTecla(e) {
@@ -593,26 +687,114 @@ function abrirFormZona() {
       overlay
         .querySelectorAll("#zonaRadios button")
         .forEach((b) => b.classList.toggle("activo", b === btn));
+      if (miniMapa) miniMapa.circulo.setRadius(radioElegido);
     };
   });
 
-  // NO es async a proposito: Safari solo muestra el dialogo de permiso si
-  // getCurrentPosition se llama dentro del propio toque (ver
-  // CONTEXTO-GEOLOCALIZACION.md, seccion 8).
-  overlay.querySelectorAll("#zonaCentros button").forEach((btn) => {
-    btn.onclick = () => {
-      centroElegido = btn.dataset.centro;
-      overlay
-        .querySelectorAll("#zonaCentros button")
-        .forEach((b) => b.classList.toggle("activo", b === btn));
-      mostrarError("");
+  // ── Mini mapa con el punto arrastrable (zona fija) ──
+  function moverPunto(lat, lng, centrar) {
+    punto = { lat, lng };
+    if (!miniMapa) return;
+    pin.setLatLng([lat, lng]);
+    miniMapa.circulo.setLatLng([lat, lng]);
+    if (centrar) miniMapa.setView([lat, lng], 17);
+  }
 
-      if (centroElegido !== "yo" || miPosicion) return;
+  async function prepararMiniMapa() {
+    if (miniMapa || proveedorMapa() !== "osm") {
+      if (!miniMapa) $("#zonaMapa").hidden = true;
+      return;
+    }
+    try {
+      await cargarLibreria();
+    } catch (_) {
+      $("#zonaMapa").hidden = true;
+      return;
+    }
+    miniMapa = L.map($("#zonaMapa"), { zoomControl: true, attributionControl: true })
+      .setView([punto.lat, punto.lng], 16);
+    L.tileLayer(TILES, { attribution: ATRIBUCION, maxZoom: 19 }).addTo(miniMapa);
+    miniMapa.circulo = L.circle([punto.lat, punto.lng], {
+      radius: radioElegido,
+      color: COLOR.presente,
+      weight: 1.5,
+      dashArray: "6 6",
+      fill: false,
+      interactive: false,
+    }).addTo(miniMapa);
+    pin = L.marker([punto.lat, punto.lng], { draggable: true }).addTo(miniMapa);
+    pin.on("dragend", () => {
+      const p = pin.getLatLng();
+      moverPunto(p.lat, p.lng, false);
+    });
+    miniMapa.on("click", (e) => moverPunto(e.latlng.lat, e.latlng.lng, false));
+    setTimeout(() => miniMapa.invalidateSize(), 50);
+  }
+
+  async function buscar() {
+    const q = $("#zonaDir").value.trim();
+    mostrarError("");
+    if (q.length < 3) return mostrarError("Escribe la dirección.");
+    resultadosEl.innerHTML = `<p class="zona-nota">Buscando…</p>`;
+    try {
+      const lista = await api(`/geocodificar?q=${encodeURIComponent(q)}`);
+      if (!lista.length) {
+        resultadosEl.innerHTML = `<p class="zona-nota">No la encontramos. Toca el lugar en el mapa.</p>`;
+        return;
+      }
+      resultadosEl.innerHTML = lista
+        .map(
+          (r, i) => `<button type="button" class="dir-opcion" data-i="${i}">${ICONS.pin}<span>${esc(
+            r.etiqueta
+          )}</span></button>`
+        )
+        .join("");
+      resultadosEl.querySelectorAll(".dir-opcion").forEach((b) => {
+        b.onclick = () => {
+          const r = lista[Number(b.dataset.i)];
+          resultadosEl
+            .querySelectorAll(".dir-opcion")
+            .forEach((x) => x.classList.toggle("activo", x === b));
+          moverPunto(r.lat, r.lng, true);
+        };
+      });
+      // El primero se marca de entrada, pero hay que mirarlo en el mapa.
+      resultadosEl.querySelector(".dir-opcion").click();
+    } catch (err) {
+      resultadosEl.innerHTML = "";
+      mostrarError(err.message);
+    }
+  }
+  $("#zonaBuscar").onclick = buscar;
+  $("#zonaDir").onkeydown = (e) => {
+    if (e.key === "Enter") buscar();
+  };
+
+  // ── Elegir el modo ──
+  function elegirModo(nuevo) {
+    modo = nuevo;
+    overlay
+      .querySelectorAll("#zonaModos button")
+      .forEach((b) => b.classList.toggle("activo", b.dataset.modo === modo));
+    $("#panelFija").hidden = modo !== "fija";
+    $("#panelCuidador").hidden = modo !== "cuidador";
+    mostrarError("");
+    if (modo === "fija") prepararMiniMapa();
+  }
+
+  overlay.querySelectorAll("#zonaModos button").forEach((btn) => {
+    // NO es async a proposito: Safari solo muestra el dialogo de permiso
+    // si getCurrentPosition se llama dentro del propio toque.
+    btn.onclick = () => {
+      elegirModo(btn.dataset.modo);
+      if (modo !== "cuidador" || miPosicion) return;
       if (!navigator.geolocation) {
         mostrarError("Este navegador no permite leer tu ubicación.");
         return;
       }
-      notaEl.textContent = "Buscando tu ubicación…";
+      const nota = $("#zonaNotaYo");
+      const textoBase = nota.textContent;
+      nota.textContent = "Buscando tu ubicación…";
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           miPosicion = {
@@ -620,10 +802,10 @@ function abrirFormZona() {
             lng: pos.coords.longitude,
             precision: Math.round(pos.coords.accuracy),
           };
-          notaEl.textContent = `Tu ubicación, con un margen de ±${miPosicion.precision} m.`;
+          nota.textContent = `${textoBase} Tu ubicación ahora: ±${miPosicion.precision} m.`;
         },
         (err) => {
-          notaEl.textContent = "";
+          nota.textContent = textoBase;
           mostrarError(
             err.code === err.PERMISSION_DENIED
               ? "No diste permiso de ubicación a esta página. Actívalo en los ajustes del navegador."
@@ -635,26 +817,42 @@ function abrirFormZona() {
     };
   });
 
+  elegirModo(modo);
+
   btnGuardar.onclick = async () => {
-    const cuerpo = { radioM: radioElegido };
-    if (centroElegido === "senior") {
-      cuerpo.lat = state.senior.ubicacion.lat;
-      cuerpo.lng = state.senior.ubicacion.lng;
-    } else if (centroElegido === "yo") {
+    let cuerpo;
+    if (modo === "cuidador") {
       if (!miPosicion) {
-        mostrarError("Espera a que el teléfono encuentre tu ubicación.");
-        return;
+        // Ya estaba siguiendo a este telefono: basta con cambiar el radio.
+        if (z.modo === "cuidador" && z.cuidadorId === state.usuario.id) {
+          cuerpo = { radioM: radioElegido };
+        } else {
+          return mostrarError("Espera a que el teléfono encuentre tu ubicación.");
+        }
+      } else {
+        cuerpo = { modo: "cuidador", lat: miPosicion.lat, lng: miPosicion.lng, radioM: radioElegido };
       }
-      cuerpo.lat = miPosicion.lat;
-      cuerpo.lng = miPosicion.lng;
+    } else {
+      const texto = $("#zonaDir").value.trim();
+      const elegido = resultadosEl.querySelector(".dir-opcion.activo span");
+      cuerpo = {
+        modo: "fija",
+        lat: punto.lat,
+        lng: punto.lng,
+        radioM: radioElegido,
+        // Se guarda lo que escribio el familiar (lo reconoce), o si no,
+        // la etiqueta del resultado.
+        direccion: texto || (elegido ? elegido.textContent : ""),
+      };
     }
 
     btnGuardar.disabled = true;
     try {
-      await api("/senior/zona-segura", {
-        method: "POST",
-        body: JSON.stringify(cuerpo),
-      });
+      await api("/senior/zona-segura", { method: "POST", body: JSON.stringify(cuerpo) });
+      // Con el modo nuevo ya guardado, arrancar el envio desde este mismo
+      // toque (sin esperar al refresco, que ya no seria un gesto).
+      if (cuerpo.modo === "cuidador") iniciarZonaMovil();
+      if (cuerpo.modo === "fija" && ZonaMovil.activo) detenerZonaMovil();
       cerrar();
       refreshAll();
     } catch (err) {
@@ -662,8 +860,9 @@ function abrirFormZona() {
       btnGuardar.disabled = false;
     }
   };
-  overlay.querySelector("#zonaCancelar").onclick = cerrar;
+  $("#zonaCancelar").onclick = cerrar;
 }
+
 
 // Coloca a la persona DENTRO del mapa estilizado, en su posición real
 // respecto al centro de la zona segura. Antes estaba clavada en un punto

@@ -914,3 +914,45 @@ body.en-login #screen { display: flex; align-items: center; }
   color: var(--texto-muted); padding: 11px 12px; cursor: pointer;
 }
 .horas-agregar { margin-bottom: 16px; }
+
+/* --- Señal del telefono y modo de la zona (tarjeta del mapa) --- */
+.time.sin-senal { color: var(--senal); font-weight: 700; display: inline-flex; align-items: center; gap: 4px; }
+.aviso-tarjeta, .info-zona {
+  display: flex; gap: 8px; align-items: flex-start;
+  margin: 10px 0 0; padding: 10px 12px; border-radius: 12px;
+  font-size: 12.5px; line-height: 1.45; color: var(--texto-muted);
+  background: var(--panel-alt);
+}
+.aviso-tarjeta svg, .info-zona svg { flex-shrink: 0; margin-top: 2px; }
+.aviso-tarjeta.alerta, .info-zona.alerta {
+  color: var(--texto); background: rgba(232,98,44,0.1);
+  border: 1px solid rgba(232,98,44,0.35);
+}
+.aviso-tarjeta.alerta svg, .info-zona.alerta svg { color: var(--senal); }
+.info-zona b { color: var(--texto); font-weight: 600; }
+.info-zona .mono { font-family: var(--font-mono); font-size: 11px; }
+div.info-zona { flex-wrap: wrap; }
+div.info-zona span { flex: 1; min-width: 0; }
+div.info-zona .btn { width: 100%; margin-top: 4px; }
+
+/* --- Formulario de zona: buscar direccion y confirmar en el mapa --- */
+.buscar-dir { display: flex; gap: 8px; }
+.buscar-dir input { flex: 1; min-width: 0; }
+.buscar-dir .btn { flex-shrink: 0; height: 46px; padding: 0 16px; }
+.dir-resultados { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.dir-opcion {
+  display: flex; gap: 8px; align-items: flex-start; text-align: left;
+  background: var(--panel-alt); border: 1px solid var(--linea); border-radius: 12px;
+  padding: 10px 12px; cursor: pointer;
+  font-family: var(--font-body); font-size: 13px; color: var(--texto);
+}
+.dir-opcion svg { flex-shrink: 0; margin-top: 3px; color: var(--texto-muted); }
+.dir-opcion.activo { border-color: var(--noche); background: rgba(201,165,53,0.1); }
+.dir-opcion.activo svg { color: var(--noche); }
+.mini-mapa {
+  height: 220px; border-radius: 14px; overflow: hidden; margin-bottom: 10px;
+  border: 1px solid var(--linea); isolation: isolate;
+}
+.mini-mapa .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.9) saturate(0.75);
+}

@@ -1,7 +1,7 @@
 // Subir este numero cuando cambie el frontend. Al cambiar el nombre del
 // cache, el "activate" de abajo borra el cache viejo y el usuario deja de
 // ver la version anterior.
-const CACHE = "conecta-senior-v13";
+const CACHE = "conecta-senior-v14";
 const ASSETS = [
   "/",
   "/styles.css",
@@ -11,6 +11,7 @@ const ASSETS = [
   "/compartir-ubicacion.js",
   "/mapa.js",
   "/vista-mayor.js",
+  "/zona-movil.js",
   "/vista-contacto.js",
   "/app.js",
 ];
