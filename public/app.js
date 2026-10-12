@@ -102,6 +102,152 @@ async function refreshAll() {
   state.recordatorios = recordatorios;
   state.medicamentos = medicamentos;
   render();
+  avisarAlertasNuevas();
+}
+
+// --- Aviso de alerta nueva (solo el cuidador) ----------------------------
+//
+// Que la alerta exista en la pestana Alertas no basta: el cuidador tiene
+// que enterarse sin estar mirandola. Con la app abierta se muestra un
+// aviso a pantalla, vibra y suena; si dio permiso de notificaciones,
+// ademas sale una notificacion del sistema.
+//
+// Limite que hay que tener claro: esto funciona mientras la app este
+// abierta (aunque sea en otra pestana, segun el navegador). Avisar con el
+// telefono bloqueado exige notificaciones push desde el servidor.
+
+const CLAVE_AVISADAS = "conecta_senior_alertas_avisadas";
+
+// La clave incluye la fecha y no solo el id: Render borra db.json en cada
+// despliegue y los ids vuelven a empezar, asi que una alerta nueva podria
+// llegar con el id de una ya avisada y quedarse muda.
+const claveAviso = (a) => `${a.id}|${a.creadoEn}`;
+
+function leerAvisadas() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(CLAVE_AVISADAS) || "[]"));
+  } catch (_) {
+    return new Set();
+  }
+}
+
+function guardarAvisadas(avisadas) {
+  try {
+    localStorage.setItem(CLAVE_AVISADAS, JSON.stringify([...avisadas].slice(-50)));
+  } catch (_) {}
+}
+
+function avisarAlertasNuevas() {
+  if (!esContacto()) return;
+  const avisadas = leerAvisadas();
+  // state.alertas viene ordenado de la mas reciente a la mas vieja.
+  const nuevas = state.alertas.filter(
+    (a) => a.estado === "pendiente" && !avisadas.has(claveAviso(a))
+  );
+  if (!nuevas.length) return;
+
+  nuevas.forEach((a) => avisadas.add(claveAviso(a)));
+  guardarAvisadas(avisadas);
+  mostrarAvisoAlerta(nuevas[0], nuevas.length);
+}
+
+function mostrarAvisoAlerta(alerta, cuantas) {
+  document.querySelector(".aviso-alerta")?.remove();
+
+  const aviso = document.createElement("div");
+  aviso.className = "aviso-alerta";
+  aviso.setAttribute("role", "alert");
+  aviso.innerHTML = `
+    <div class="aviso-icono">${ICONS.warn}</div>
+    <div class="aviso-cuerpo">
+      <p class="aviso-titulo">${esc(alerta.titulo)}</p>
+      <p class="aviso-detalle">${esc(alerta.detalle)}</p>
+      <p class="aviso-hora">${esc(fmtCuando(alerta.creadoEn))}${
+        cuantas > 1 ? ` · y ${cuantas - 1} más` : ""
+      }</p>
+      <div class="aviso-acciones">
+        <button class="btn btn-primary" data-aviso="ver">Ver alertas</button>
+        <button class="btn btn-secondary" data-aviso="cerrar">Entendido</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(aviso);
+
+  aviso.querySelector('[data-aviso="ver"]').onclick = () => {
+    aviso.remove();
+    state.tab = "alertas";
+    render();
+  };
+  aviso.querySelector('[data-aviso="cerrar"]').onclick = () => aviso.remove();
+
+  if (navigator.vibrate) navigator.vibrate([500, 200, 500, 200, 500]);
+  sonarAlarma();
+  notificarAlSistema(alerta);
+}
+
+// El navegador no deja sonar nada hasta que la persona toca la pantalla
+// al menos una vez. Se prepara el audio en el primer toque y a partir de
+// ahi la alarma puede sonar sola.
+let contextoAudio = null;
+
+function prepararSonido() {
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    contextoAudio = contextoAudio || new Ctx();
+    if (contextoAudio.state === "suspended") contextoAudio.resume();
+  } catch (_) {}
+}
+document.addEventListener("pointerdown", prepararSonido, { passive: true });
+
+function sonarAlarma() {
+  if (!contextoAudio || contextoAudio.state !== "running") return;
+  const t0 = contextoAudio.currentTime;
+  for (let i = 0; i < 3; i++) {
+    const osc = contextoAudio.createOscillator();
+    const vol = contextoAudio.createGain();
+    osc.type = "square";
+    osc.frequency.value = 880;
+    vol.gain.setValueAtTime(0.0001, t0 + i * 0.45);
+    vol.gain.exponentialRampToValueAtTime(0.25, t0 + i * 0.45 + 0.02);
+    vol.gain.exponentialRampToValueAtTime(0.0001, t0 + i * 0.45 + 0.3);
+    osc.connect(vol).connect(contextoAudio.destination);
+    osc.start(t0 + i * 0.45);
+    osc.stop(t0 + i * 0.45 + 0.32);
+  }
+}
+
+// --- Notificaciones del sistema ---
+// Van por el service worker porque en Android Chrome `new Notification()`
+// desde la pagina no esta permitido. En iPhone solo existen si la app se
+// instalo en la pantalla de inicio (iOS 16.4 o posterior).
+
+function notificacionesDisponibles() {
+  return "Notification" in window && "serviceWorker" in navigator;
+}
+
+async function pedirPermisoNotificaciones() {
+  if (!notificacionesDisponibles()) return "no-disponible";
+  try {
+    return await Notification.requestPermission();
+  } catch (_) {
+    return "denied";
+  }
+}
+
+async function notificarAlSistema(alerta) {
+  if (!notificacionesDisponibles() || Notification.permission !== "granted") return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    await reg.showNotification(alerta.titulo, {
+      body: alerta.detalle,
+      tag: "alerta-" + claveAviso(alerta),
+      icon: "icons/icon-192.png",
+      badge: "icons/icon-192.png",
+      vibrate: [500, 200, 500, 200, 500],
+      requireInteraction: true,
+    });
+  } catch (_) {}
 }
 
 // Se llama justo despues del login y tambien al abrir la app con una
@@ -123,7 +269,7 @@ async function iniciarSesionEnLaApp() {
 
   // El compartir de ubicacion cambia de estado por su cuenta (permiso
   // concedido, primer fix, error del GPS). Sin esto habria que esperar
-  // al refresco de 15 s para enterarse.
+  // al refresco de 10 s para enterarse.
   if (typeof Ubicacion !== "undefined") {
     Ubicacion.alCambiar = () => {
       if (state.tab === "hoy") render();
@@ -133,10 +279,13 @@ async function iniciarSesionEnLaApp() {
 
   await refreshAll();
 
+  // Cada 10 s, el mismo ritmo al que reporta el telefono del adulto
+  // mayor: con 15 s el aviso de una salida podia llegar casi medio minuto
+  // tarde sobre lo que ya tarda la geocerca en confirmarla.
   clearInterval(temporizadorRefresco);
   temporizadorRefresco = setInterval(() => {
     refreshAll().catch(() => {});
-  }, 15000);
+  }, 10000);
 }
 
 async function cerrarSesion() {

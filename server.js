@@ -347,9 +347,63 @@ app.post(
   requiereRol("contacto_emergencia"),
   (req, res) => {
     const db = loadDb();
-    db.senior.ubicacion.actualizadoEn = new Date().toISOString();
+    // Va en su propio campo. Antes pisaba ubicacion.actualizadoEn, y eso
+    // hacia pasar una ubicacion de hace horas por una recien leida: justo
+    // lo que un cuidador no debe creer.
+    db.senior.revisadoEn = new Date().toISOString();
     saveDb(db);
     res.json(db.senior);
+  }
+);
+
+// El cuidador define la zona segura desde su propio telefono. Hasta ahora
+// solo se podia mover desde el simulador, asi que una prueba real exigia
+// abrir una herramienta de demo o editar el seed.
+//
+// Al moverla se reinicia el conteo de la geocerca: las lecturas
+// acumuladas se midieron contra la zona vieja y ya no dicen nada. Si la
+// persona queda fuera de la zona nueva, las siguientes lecturas lo
+// confirman y saltara la alerta como siempre, sin atajos.
+app.post(
+  "/api/senior/zona-segura",
+  requiereAuth,
+  requiereRol("contacto_emergencia"),
+  (req, res) => {
+    const { lat, lng, radioM } = req.body || {};
+    const db = loadDb();
+    const zona = db.senior.zonaSegura;
+
+    const hayCentro = typeof lat === "number" || typeof lng === "number";
+    if (hayCentro) {
+      if (
+        typeof lat !== "number" || typeof lng !== "number" ||
+        lat < -90 || lat > 90 || lng < -180 || lng > 180
+      ) {
+        return res.status(400).json({ error: "Coordenadas no válidas" });
+      }
+    }
+    if (radioM != null && (typeof radioM !== "number" || radioM < 50 || radioM > 5000)) {
+      return res.status(400).json({ error: "El radio debe estar entre 50 y 5000 m" });
+    }
+
+    if (hayCentro) {
+      zona.lat = lat;
+      zona.lng = lng;
+    }
+    if (radioM != null) zona.radioM = Math.round(radioM);
+
+    // ultimaLectura se conserva: el guardia de velocidad mide como se
+    // mueve la persona, y eso no cambia porque se mueva la zona.
+    const seg = db.senior.seguimiento;
+    seg.estaFuera = false;
+    seg.lecturasFuera = 0;
+    seg.lecturasDentro = 0;
+    db.senior.status = db.alertas.some((a) => a.estado === "pendiente")
+      ? "alerta"
+      : "presente";
+
+    saveDb(db);
+    res.json(zona);
   }
 );
 

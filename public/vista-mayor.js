@@ -51,7 +51,10 @@ function renderMayorHoy() {
   const s = state.senior;
   if (!s) { screenEl.innerHTML = '<div class="loading">Cargando…</div>'; return; }
 
-  const enAlerta = s.status === "alerta";
+  // Igual que en la vista del cuidador, "fuera" sale de la geocerca y no
+  // del estado general: atender la alerta no la devuelve a su zona.
+  const fuera = !!(s.seguimiento && s.seguimiento.estaFuera);
+  const enAlerta = fuera || s.status === "alerta";
   const principal = contactoPrincipal();
 
   screenEl.innerHTML = `
@@ -64,7 +67,11 @@ function renderMayorHoy() {
       <div class="estado-mayor-icono">${enAlerta ? ICONS.warn : ICONS.escudo}</div>
       <div>
         <p class="estado-mayor-titulo">${
-          enAlerta ? "Tienes una alerta activa" : "Estás en tu zona segura"
+          fuera
+            ? "Estás fuera de tu zona segura"
+            : enAlerta
+              ? "Tienes una alerta activa"
+              : "Estás en tu zona segura"
         }</p>
         <p class="estado-mayor-sub">${
           enAlerta

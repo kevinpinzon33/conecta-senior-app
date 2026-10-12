@@ -163,6 +163,9 @@ html, body {
   height: 260px;
   background: linear-gradient(180deg, #1F2530 0%, #1B2029 60%, #181B21 100%);
   overflow: hidden;
+  /* Leaflet pone sus capas con z-index de 400 a 1000. Sin aislarlas aqui
+     se pintan por encima de los formularios y del aviso de alerta. */
+  isolation: isolate;
 }
 .map-canvas svg.streets { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0.6; }
 .safe-zone {
@@ -839,3 +842,47 @@ body.en-login #screen { display: flex; align-items: center; }
   background: rgba(37,41,49,0.92) !important;
   border: 1px solid var(--linea) !important;
 }
+
+/* --- Zona segura: boton en la tarjeta del mapa y formulario --- */
+.ajustar-zona {
+  background: none; border: none; padding: 0; cursor: pointer;
+  font-family: var(--font-body); font-size: 12px; color: var(--texto-muted);
+}
+.ajustar-zona b { color: var(--noche); font-weight: 600; }
+.radios-zona button { padding: 12px 4px; font-size: 13px; }
+.tipo-picker button:disabled { opacity: 0.4; cursor: default; }
+.zona-nota {
+  margin: -6px 0 16px; font-size: 12px; line-height: 1.45; color: var(--texto-muted);
+}
+
+/* --- Aviso de alerta nueva (cuidador) --- */
+.aviso-alerta {
+  position: fixed; z-index: 60;
+  top: calc(12px + env(safe-area-inset-top));
+  left: 50%; transform: translateX(-50%);
+  width: calc(100% - 24px); max-width: 448px;
+  display: flex; gap: 12px;
+  background: var(--panel); border: 2px solid var(--senal);
+  border-radius: 18px; padding: 16px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.55);
+  animation: avisoEntrar 0.25s ease-out;
+}
+@keyframes avisoEntrar {
+  from { transform: translate(-50%, -16px); opacity: 0; }
+  to { transform: translate(-50%, 0); opacity: 1; }
+}
+.aviso-icono {
+  flex-shrink: 0; width: 40px; height: 40px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(232,98,44,0.15); color: var(--senal);
+}
+.aviso-cuerpo { flex: 1; min-width: 0; }
+.aviso-titulo {
+  margin: 0; font-family: var(--font-display); font-size: 20px; font-weight: 600;
+  color: var(--texto);
+}
+.aviso-detalle { margin: 4px 0 0; font-size: 13px; line-height: 1.4; color: var(--texto); }
+.aviso-hora { margin: 4px 0 12px; font-size: 11.5px; color: var(--texto-muted); }
+.aviso-acciones { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+.simulate-bar button.btn-notif { background: var(--noche); color: var(--bg); }

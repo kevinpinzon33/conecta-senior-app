@@ -187,9 +187,7 @@ function renderInicio() {
       }</div>
       <div class="map-info">
         <div class="map-info-row">
-          <span class="pill ${s.status}">${ICONS.check} ${
-            s.status === "alerta" ? "Alerta activa" : "Dentro de la zona segura"
-          }</span>
+          ${pildoraZona(s)}
           <span class="time">${
             enVivo(s)
               ? '<span class="punto-vivo"></span>EN VIVO'
@@ -212,7 +210,9 @@ function renderInicio() {
           </div>
         </div>
         <div class="map-meta">
-          <span>Radio zona segura: ${s.zonaSegura.radioM} m</span>
+          <button class="ajustar-zona" id="btnZona">
+            Zona segura: ${s.zonaSegura.radioM} m · <b>Ajustar</b>
+          </button>
           ${
             enVivo(s)
               ? `<a href="${urlMapa(s.ubicacion.lat, s.ubicacion.lng)}"
@@ -249,6 +249,7 @@ function renderInicio() {
     });
   }
 
+  document.getElementById("btnZona").onclick = abrirFormZona;
   document.getElementById("btnVisto").onclick = async () => {
     await api("/senior/marcar-visto", { method: "POST" });
     refreshAll();
@@ -294,6 +295,177 @@ function enVivo(s) {
   return s.ubicacion.fuente === "gps";
 }
 
+// Lo que dice la etiqueta sale de la geocerca, no del estado general.
+// Antes solo miraba status, y al marcar la alerta como atendida volvia a
+// decir "Dentro de la zona segura" aunque la persona siguiera fuera.
+function pildoraZona(s) {
+  if (s.seguimiento && s.seguimiento.estaFuera) {
+    return `<span class="pill alerta">${ICONS.warn} Fuera de la zona segura</span>`;
+  }
+  if (s.status === "alerta") {
+    return `<span class="pill alerta">${ICONS.warn} Alerta activa</span>`;
+  }
+  return `<span class="pill presente">${ICONS.check} Dentro de la zona segura</span>`;
+}
+
+// ── Zona segura ───────────────────────────────────────────────────
+// El cuidador la define desde su telefono. Para el centro hay tres
+// opciones: dejarlo, ponerlo donde esta la persona ahora (solo si su
+// ubicacion es en vivo, no el dato de ejemplo) o donde esta el propio
+// cuidador, que sirve para fijar "la casa" antes de que el adulto mayor
+// empiece a compartir.
+
+const RADIOS_ZONA = [100, 200, 300, 500, 1000];
+
+function abrirFormZona() {
+  const s = state.senior;
+  const nombre = primerNombre(s.nombre);
+  const radios = RADIOS_ZONA.includes(s.zonaSegura.radioM)
+    ? RADIOS_ZONA
+    : [...RADIOS_ZONA, s.zonaSegura.radioM].sort((a, b) => a - b);
+
+  let radioElegido = s.zonaSegura.radioM;
+  let centroElegido = "igual";
+  let miPosicion = null;
+
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = `
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="zonaTitle">
+      <h2 id="zonaTitle">Zona segura</h2>
+
+      <label>Radio</label>
+      <div class="tipo-picker radios-zona" id="zonaRadios">
+        ${radios
+          .map(
+            (r) => `<button type="button" data-radio="${r}" class="${
+              r === radioElegido ? "activo" : ""
+            }"><span>${r >= 1000 ? r / 1000 + " km" : r + " m"}</span></button>`
+          )
+          .join("")}
+      </div>
+
+      <label>Centro</label>
+      <div class="tipo-picker" id="zonaCentros">
+        <button type="button" data-centro="igual" class="activo">${ICONS.check}<span>Dejarlo</span></button>
+        <button type="button" data-centro="senior" ${enVivo(s) ? "" : "disabled"}>${ICONS.persona}<span>Donde está ${esc(nombre)}</span></button>
+        <button type="button" data-centro="yo">${ICONS.pin}<span>Donde estoy yo</span></button>
+      </div>
+      <p class="zona-nota" id="zonaNota">${
+        enVivo(s)
+          ? `Al guardar se reinicia la vigilancia. Si ${esc(nombre)} queda fuera, la alerta llega en menos de un minuto.`
+          : `“Donde está ${esc(nombre)}” se activa cuando comparta su ubicación desde su teléfono.`
+      }</p>
+
+      <p class="modal-error" id="zonaError" hidden></p>
+
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="zonaCancelar">Cancelar</button>
+        <button class="btn btn-primary" id="zonaGuardar">Guardar</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const errorEl = overlay.querySelector("#zonaError");
+  const notaEl = overlay.querySelector("#zonaNota");
+  const btnGuardar = overlay.querySelector("#zonaGuardar");
+
+  const mostrarError = (texto) => {
+    errorEl.textContent = texto;
+    errorEl.hidden = !texto;
+  };
+
+  const cerrar = () => {
+    document.removeEventListener("keydown", alPresionarTecla);
+    overlay.remove();
+  };
+  function alPresionarTecla(e) {
+    if (e.key === "Escape") cerrar();
+  }
+  document.addEventListener("keydown", alPresionarTecla);
+  overlay.onclick = (e) => {
+    if (e.target === overlay) cerrar();
+  };
+
+  overlay.querySelectorAll("#zonaRadios button").forEach((btn) => {
+    btn.onclick = () => {
+      radioElegido = Number(btn.dataset.radio);
+      overlay
+        .querySelectorAll("#zonaRadios button")
+        .forEach((b) => b.classList.toggle("activo", b === btn));
+    };
+  });
+
+  // NO es async a proposito: Safari solo muestra el dialogo de permiso si
+  // getCurrentPosition se llama dentro del propio toque (ver
+  // CONTEXTO-GEOLOCALIZACION.md, seccion 8).
+  overlay.querySelectorAll("#zonaCentros button").forEach((btn) => {
+    btn.onclick = () => {
+      centroElegido = btn.dataset.centro;
+      overlay
+        .querySelectorAll("#zonaCentros button")
+        .forEach((b) => b.classList.toggle("activo", b === btn));
+      mostrarError("");
+
+      if (centroElegido !== "yo" || miPosicion) return;
+      if (!navigator.geolocation) {
+        mostrarError("Este navegador no permite leer tu ubicación.");
+        return;
+      }
+      notaEl.textContent = "Buscando tu ubicación…";
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          miPosicion = {
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            precision: Math.round(pos.coords.accuracy),
+          };
+          notaEl.textContent = `Tu ubicación, con un margen de ±${miPosicion.precision} m.`;
+        },
+        (err) => {
+          notaEl.textContent = "";
+          mostrarError(
+            err.code === err.PERMISSION_DENIED
+              ? "No diste permiso de ubicación a esta página. Actívalo en los ajustes del navegador."
+              : "No se pudo leer tu ubicación. Revisa que el GPS del teléfono esté encendido."
+          );
+        },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+      );
+    };
+  });
+
+  btnGuardar.onclick = async () => {
+    const cuerpo = { radioM: radioElegido };
+    if (centroElegido === "senior") {
+      cuerpo.lat = state.senior.ubicacion.lat;
+      cuerpo.lng = state.senior.ubicacion.lng;
+    } else if (centroElegido === "yo") {
+      if (!miPosicion) {
+        mostrarError("Espera a que el teléfono encuentre tu ubicación.");
+        return;
+      }
+      cuerpo.lat = miPosicion.lat;
+      cuerpo.lng = miPosicion.lng;
+    }
+
+    btnGuardar.disabled = true;
+    try {
+      await api("/senior/zona-segura", {
+        method: "POST",
+        body: JSON.stringify(cuerpo),
+      });
+      cerrar();
+      refreshAll();
+    } catch (err) {
+      mostrarError(err.message);
+      btnGuardar.disabled = false;
+    }
+  };
+  overlay.querySelector("#zonaCancelar").onclick = cerrar;
+}
+
 // Coloca a la persona DENTRO del mapa estilizado, en su posición real
 // respecto al centro de la zona segura. Antes estaba clavada en un punto
 // fijo, así que el mapa no reflejaba nada: ahora, si se aleja, se ve
@@ -319,6 +491,33 @@ function estiloPosicion(s) {
   const y = tope(-norte * pxPorMetro, 100);
 
   return `left: calc(50% + ${x.toFixed(1)}px); top: calc(48% + ${y.toFixed(1)}px);`;
+}
+
+// Con permiso, una alerta nueva sale tambien como notificacion del
+// sistema (ver app.js). En iPhone el navegador no las ofrece hasta que la
+// app se agrega a la pantalla de inicio, y conviene decirlo: si no, el
+// cuidador busca un boton que no existe.
+function barraNotificaciones() {
+  if (!notificacionesDisponibles()) {
+    return `
+    <div class="simulate-bar">
+      <p>Para recibir notificaciones en iPhone, agrega la app a la pantalla de inicio (Compartir → Agregar a inicio) y ábrela desde ahí.</p>
+    </div>`;
+  }
+  if (Notification.permission === "default") {
+    return `
+    <div class="simulate-bar">
+      <p>Activa las notificaciones para enterarte de una alerta aunque estés en otra pantalla.</p>
+      <button id="btnNotif" class="btn-notif">Activar</button>
+    </div>`;
+  }
+  if (Notification.permission === "denied") {
+    return `
+    <div class="simulate-bar">
+      <p>Las notificaciones están bloqueadas para esta página. Actívalas en los ajustes del navegador.</p>
+    </div>`;
+  }
+  return "";
 }
 
 function renderAlertas() {
@@ -348,6 +547,8 @@ function renderAlertas() {
       <p class="hero-greeting" style="margin-top:4px">Cada alerta se envía también por WhatsApp</p>
     </div>
 
+    ${barraNotificaciones()}
+
     <div class="simulate-bar">
       <p>Para probar el flujo sin la pulsera física: simula que alguien escaneó el código QR.</p>
       <button id="btnSimular">Simular escaneo</button>
@@ -357,6 +558,14 @@ function renderAlertas() {
       ${items || '<p class="loading">Sin alertas todavía</p>'}
     </div>
   `;
+
+  const btnNotif = document.getElementById("btnNotif");
+  if (btnNotif) {
+    btnNotif.onclick = async () => {
+      await pedirPermisoNotificaciones();
+      render();
+    };
+  }
 
   document.getElementById("btnSimular").onclick = async () => {
     await api("/alertas/simular-scan", { method: "POST" });

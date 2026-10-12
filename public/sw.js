@@ -1,7 +1,7 @@
 // Subir este numero cuando cambie el frontend. Al cambiar el nombre del
 // cache, el "activate" de abajo borra el cache viejo y el usuario deja de
 // ver la version anterior.
-const CACHE = "conecta-senior-v11";
+const CACHE = "conecta-senior-v12";
 const ASSETS = [
   "/",
   "/styles.css",
@@ -55,5 +55,19 @@ self.addEventListener("fetch", (e) => {
         return res;
       })
       .catch(() => caches.match(e.request))
+  );
+});
+
+// Tocar la notificacion de una alerta lleva a la app: si ya esta abierta
+// se trae al frente, y si no, se abre.
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close();
+  e.waitUntil(
+    self.clients
+      .matchAll({ type: "window", includeUncontrolled: true })
+      .then((ventanas) => {
+        const abierta = ventanas.find((v) => "focus" in v);
+        return abierta ? abierta.focus() : self.clients.openWindow("/");
+      })
   );
 });

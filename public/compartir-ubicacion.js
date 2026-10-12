@@ -120,7 +120,10 @@ async function enviarPosicion(pos) {
     // pantalla de la persona sigue enseñando la dirección de ejemplo del
     // seed, y resulta confuso ver "compartiendo" junto a una calle que
     // no es la suya. Solo la primera: despues basta el refresco de 15 s.
-    if (primeraAceptada && r.aceptada !== false) {
+    // Y tambien cuando el servidor confirma una salida o un regreso: la
+    // pantalla de la persona no puede seguir diciendo "Estás en tu zona
+    // segura" hasta el siguiente refresco cuando su familia ya fue avisada.
+    if ((primeraAceptada && r.aceptada !== false) || r.evento) {
       primeraAceptada = false;
       if (typeof refreshAll === "function") refreshAll().catch(() => {});
     }
