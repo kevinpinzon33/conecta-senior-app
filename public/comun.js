@@ -37,23 +37,31 @@ const TAB_ICONS = {
   casa: `<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 10 9-7 9 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>`,
 };
 
-// Cada tipo de recordatorio tiene su icono y su color.
+// Cada tipo de recordatorio tiene su icono y su color. Las citas medicas
+// ya no son recordatorios: tienen su propia lista (ver ESTADOS_CITA).
 const TIPOS_RECORDATORIO = {
   medicamento: { icono: "pill", color: "var(--cuidado)", etiqueta: "Medicamento" },
-  cita: { icono: "cita", color: "var(--noche)", etiqueta: "Cita" },
   otro: { icono: "otro", color: "var(--presente)", etiqueta: "Otro" },
+};
+
+// Mismos estados que citas_medicas.estado en el backend real.
+const ESTADOS_CITA = {
+  programada: { etiqueta: "Programada", color: "var(--noche)" },
+  cumplida: { etiqueta: "Cumplida", color: "var(--presente)" },
+  cancelada: { etiqueta: "Cancelada", color: "var(--texto-muted)" },
 };
 
 const CLAVE_TOKEN = "conecta_senior_token";
 
 let state = {
-  usuario: null, // { id, nombre, rol, seniorId, contactoId }
+  usuario: null, // { id, usuario, nombre, rol, adultoMayorId }
   token: localStorage.getItem(CLAVE_TOKEN) || null,
   senior: null,
   alertas: [],
   contactos: [],
   recordatorios: [],
   medicamentos: [],
+  citas: [],
   tab: null,
 };
 
@@ -100,11 +108,14 @@ function olvidarSesion() {
   state.contactos = [];
   state.recordatorios = [];
   state.medicamentos = [];
+  state.citas = [];
   state.tab = null;
   localStorage.removeItem(CLAVE_TOKEN);
 }
 
-const esContacto = () => state.usuario?.rol === "contacto_emergencia";
+// Los roles del backend real. Familiar y cuidador ven la misma interfaz.
+const ROLES_CUIDADOR = ["familiar", "cuidador"];
+const esContacto = () => ROLES_CUIDADOR.includes(state.usuario?.rol);
 const esAdultoMayor = () => state.usuario?.rol === "adulto_mayor";
 
 // --- Helpers de formato --------------------------------------------------
@@ -226,4 +237,24 @@ function contactoPrincipal() {
 
 function telHref(telefono) {
   return `tel:${String(telefono || "").replace(/\s/g, "")}`;
+}
+
+// Como en el backend real, el indicativo va aparte del numero
+// (indicador_tel_principal = "+57", telefono_principal = "3203883602").
+function telDeContacto(c) {
+  if (!c) return telHref("");
+  return telHref(`${c.indicadorTelPrincipal || ""}${c.telefonoPrincipal || ""}`);
+}
+
+// Lo que se muestra debajo del nombre: el parentesco ("Hijo") dice mas
+// que la relacion ("familiar").
+function vinculoDeContacto(c) {
+  return c.parentesco || c.relacion || "";
+}
+
+// "2026-11-05T10:00" -> "mié 5 de nov · 10:00 am". Es hora local de
+// Colombia, igual que el DATETIME de citas_medicas: no se convierte.
+function fmtFechaHoraCita(fechaHora) {
+  const [fecha, hora] = String(fechaHora || "").split("T");
+  return [fmtFecha(fecha), fmtHora(hora)].filter(Boolean).join(" · ");
 }

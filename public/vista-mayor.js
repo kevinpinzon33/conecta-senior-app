@@ -99,7 +99,7 @@ function renderMayorHoy() {
 
     ${
       principal
-        ? `<a class="btn-llamar-mayor" href="${telHref(principal.telefonoPrincipal)}">
+        ? `<a class="btn-llamar-mayor" href="${telDeContacto(principal)}">
              ${ICONS.phone}
              <span>Llamar a ${esc(primerNombre(principal.nombre))}</span>
            </a>`
@@ -115,10 +115,38 @@ function renderMayorHoy() {
       }
       ${renderMayorRecordatorios()}
     </div>
+
+    ${renderMayorCitas()}
   `;
 
   conectarToggleRecordatoriosMayor();
   conectarCompartirUbicacion();
+}
+
+// Sus proximas citas, solo las programadas. Ella no las edita: solo
+// necesita saber cuando y donde. Si no hay ninguna, la seccion no sale.
+function renderMayorCitas() {
+  const proximas = state.citas.filter((c) => c.estado === "programada");
+  if (!proximas.length) return "";
+  const filas = proximas
+    .map(
+      (c) => `
+      <div class="cita-card">
+        <div class="icon-badge" style="background:var(--noche)18;color:var(--noche)">${ICONS.cita}</div>
+        <div class="cita-body">
+          <p class="title">${esc(c.especialidad)}</p>
+          <p class="sub cita-cuando">${esc(fmtFechaHoraCita(c.fechaHora))}</p>
+          ${c.institucion ? `<p class="sub">${esc(c.institucion)}</p>` : ""}
+          ${c.direccion ? `<p class="sub">${esc(c.direccion)}</p>` : ""}
+        </div>
+      </div>`
+    )
+    .join("");
+  return `
+    <div class="section">
+      <p class="section-title">Mis citas médicas</p>
+      <div class="med-lista">${filas}</div>
+    </div>`;
 }
 
 // ── Compartir mi ubicación ────────────────────────────────────────
@@ -226,11 +254,11 @@ function renderMayorInfo() {
   const contactosHtml = state.contactos
     .map(
       (c) => `
-      <a class="contacto-mayor" href="${telHref(c.telefonoPrincipal)}">
+      <a class="contacto-mayor" href="${telDeContacto(c)}">
         <div class="contact-avatar">${ICONS.persona}</div>
         <div class="contacto-mayor-body">
           <p class="title">${esc(c.nombre)}</p>
-          <p class="sub">${esc(c.relacion)}</p>
+          <p class="sub">${esc(vinculoDeContacto(c))}</p>
         </div>
         <span class="contacto-mayor-llamar">${ICONS.phone}</span>
       </a>`
@@ -242,7 +270,7 @@ function renderMayorInfo() {
       <div class="avatar-lg">${esc(s.nombre.charAt(0))}</div>
       <div>
         <h1>${esc(s.nombre)}</h1>
-        <p>${s.edad} años · Pulsera #${esc(s.pulseraId)}</p>
+        <p>${s.edad != null ? s.edad + " años · " : ""}Pulsera #${esc(s.codigoQr)}</p>
       </div>
     </div>
 

@@ -1,99 +1,195 @@
 {
-  "_comentario": "Datos de ejemplo INVENTADOS, salvo el telefono de Kevin Pinzon, que es real y lo pidio el usuario para las pruebas. Los nombres de campo siguen los del backend real (proyecto conecta-senior): contactos usan relacion/telefonoPrincipal/prioridad y medicamentos usa dosis/frecuencia/horario/viaAdministracion, en camelCase por ser JSON. Asi el mapeo a las tablas MySQL es 1:1. Las claves van en texto plano solo porque son usuarios de prueba.",
+  "_comentario": "Datos de ejemplo INVENTADOS, salvo el telefono de Kevin Pinzon, que es real y lo pidio el usuario para las pruebas. Cada coleccion es una tabla del backend real (conecta-senior, esquema _esquema_completo.sql del ZIP _5-10) con sus columnas en camelCase: adultoMayor = adulto_mayor, adultoResponsable = adulto_responsable, contactosEmergencia = contactos_emergencia, etc. Las colecciones marcadas en _propias NO existen en el backend real: son la propuesta de tablas nuevas para ubicacion, zona segura, alertas y recordatorios. Las claves van en texto plano solo porque son usuarios de prueba.",
+  "_propias": ["recordatorios", "alertas", "zonasSeguras", "monitoreo", "sesiones"],
+
   "usuarios": [
     {
       "id": 1,
       "usuario": "claudia",
       "clave": "claudia123",
-      "rol": "adulto_mayor",
       "nombre": "Claudia Castillo",
-      "seniorId": 1,
-      "contactoId": null
+      "correo": "claudia.castillo@ejemplo.com",
+      "celular": "3101234567",
+      "indicadorCelular": "+57",
+      "rol": "adulto_mayor",
+      "estado": "activo"
     },
     {
       "id": 2,
       "usuario": "kevin",
       "clave": "kevin123",
-      "rol": "contacto_emergencia",
       "nombre": "Kevin Pinzón",
-      "seniorId": 1,
-      "contactoId": 1
+      "correo": "kevin.pinzon@ejemplo.com",
+      "celular": "3203883602",
+      "indicadorCelular": "+57",
+      "rol": "familiar",
+      "estado": "activo"
     }
   ],
-  "sesiones": [],
-  "senior": {
-    "id": 1,
-    "nombre": "Claudia Castillo",
-    "edad": 78,
-    "pulseraId": "CS-00412",
-    "tipoSangre": "O positivo",
-    "condiciones": "Hipertension, diabetes tipo 2",
-    "alergias": "Penicilina",
-    "status": "presente",
-    "ubicacion": {
-      "direccion": "Calle 181 #13-54, San Antonio Noroccidental, Bogotá",
-      "lat": 4.75793,
-      "lng": -74.03965,
-      "actualizadoEn": "2026-08-03T15:12:00.000Z"
-    },
-    "zonaSegura": {
-      "lat": 4.75793,
-      "lng": -74.03965,
-      "radioM": 300
-    },
-    "seguimiento": {
-      "estaFuera": false,
-      "lecturasFuera": 0,
-      "lecturasDentro": 0,
-      "ultimaLectura": null
-    }
-  },
-  "contactos": [
+
+  "adultoMayor": [
     {
       "id": 1,
+      "nombreCompleto": "Claudia Castillo",
+      "fechaNacimiento": "1948-03-14",
+      "ciudad": "Bogotá",
+      "barrio": "San Antonio Noroccidental",
+      "direccion": "Calle 181 #13-54",
+      "movilidad": "Camina sin ayuda",
+      "estadoCognitivo": "Olvidos leves",
+      "fotoUrl": null,
+      "plan": "esencial",
+      "codigoQr": "CS-00412"
+    }
+  ],
+
+  "adultoResponsable": [
+    {
+      "id": 1,
+      "adultoMayorId": 1,
+      "usuarioId": 2,
+      "tipoRelacion": "familiar",
+      "esPrincipal": true,
+      "parentesco": "Hijo"
+    }
+  ],
+
+  "informacionMedica": [
+    {
+      "id": 1,
+      "adultoMayorId": 1,
+      "tipoSangre": "O+",
+      "condiciones": "Hipertensión, diabetes tipo 2",
+      "alergias": "Penicilina",
+      "notas": ""
+    }
+  ],
+
+  "contactosEmergencia": [
+    {
+      "id": 1,
+      "adultoMayorId": 1,
       "nombre": "Kevin Pinzón",
-      "relacion": "Hijo",
-      "telefonoPrincipal": "+57 320 388 3602",
+      "relacion": "familiar",
+      "parentesco": "Hijo",
+      "telefonoPrincipal": "3203883602",
+      "indicadorTelPrincipal": "+57",
+      "telefonoSecundario": null,
+      "indicadorTelSecundario": null,
+      "correo": null,
       "prioridad": 1
     },
     {
       "id": 2,
+      "adultoMayorId": 1,
       "nombre": "Marco Castillo",
-      "relacion": "Hijo",
-      "telefonoPrincipal": "+57 320 123 4567",
+      "relacion": "familiar",
+      "parentesco": "Hijo",
+      "telefonoPrincipal": "3201234567",
+      "indicadorTelPrincipal": "+57",
+      "telefonoSecundario": null,
+      "indicadorTelSecundario": null,
+      "correo": null,
       "prioridad": 2
     },
     {
       "id": 3,
+      "adultoMayorId": 1,
       "nombre": "Elena Torres",
-      "relacion": "Cuidadora",
-      "telefonoPrincipal": "+57 320 765 4321",
+      "relacion": "cuidador",
+      "parentesco": "Cuidadora",
+      "telefonoPrincipal": "3207654321",
+      "indicadorTelPrincipal": "+57",
+      "telefonoSecundario": null,
+      "indicadorTelSecundario": null,
+      "correo": null,
       "prioridad": 3
     }
   ],
-  "alertas": [
-    {
-      "id": 4,
-      "tipo": "wristband",
-      "titulo": "Pulsera conectada",
-      "detalle": "La pulsera se sincronizo correctamente",
-      "lugar": "Notificacion automatica",
-      "creadoEn": "2026-07-28T13:15:00.000Z",
-      "estado": "atendida",
-      "whatsappEnviado": true
-    },
-    {
-      "id": 3,
-      "tipo": "zona",
-      "titulo": "Salio de la zona segura",
-      "detalle": "Claudia salio del perimetro configurado",
-      "lugar": "Calle 181 con Carrera 13",
-      "creadoEn": "2026-08-02T11:03:00.000Z",
-      "estado": "atendida",
-      "whatsappEnviado": true
-    },
+
+  "medicamentos": [
     {
       "id": 1,
+      "adultoMayorId": 1,
+      "nombre": "Losartán",
+      "dosis": "50 mg",
+      "frecuencia": "Una vez al día",
+      "horario": "8:00 a. m.",
+      "viaAdministracion": "Oral",
+      "fechaInicio": "2026-01-15",
+      "fechaFin": null,
+      "notas": "Tomar con el desayuno",
+      "activo": true,
+      "fechaCreacion": "2026-08-03T12:00:00.000Z"
+    },
+    {
+      "id": 2,
+      "adultoMayorId": 1,
+      "nombre": "Metformina",
+      "dosis": "500 mg",
+      "frecuencia": "Cada 12 horas",
+      "horario": "7:00 a. m. y 7:00 p. m.",
+      "viaAdministracion": "Oral",
+      "fechaInicio": "2025-11-02",
+      "fechaFin": null,
+      "notas": "",
+      "activo": true,
+      "fechaCreacion": "2026-08-03T12:00:00.000Z"
+    }
+  ],
+
+  "medicamentoHoras": [
+    { "id": 1, "medicamentoId": 1, "hora": "08:00" },
+    { "id": 2, "medicamentoId": 2, "hora": "07:00" },
+    { "id": 3, "medicamentoId": 2, "hora": "19:00" }
+  ],
+
+  "citasMedicas": [
+    {
+      "id": 1,
+      "adultoMayorId": 1,
+      "especialidad": "Cardiología",
+      "profesional": "Dra. Paula Ríos",
+      "institucion": "Clínica del Country",
+      "direccion": "Carrera 16 #82-57, consultorio 304",
+      "notas": "Llevar los últimos exámenes de sangre",
+      "fechaHora": "2026-11-05T10:00",
+      "estado": "programada",
+      "antelaciones": null,
+      "creadoPor": 2,
+      "creadoEn": "2026-10-01T12:00:00.000Z"
+    }
+  ],
+
+  "recordatorios": [
+    {
+      "id": 1,
+      "adultoMayorId": 1,
+      "tipo": "medicamento",
+      "titulo": "Medicamento de la tarde",
+      "detalle": "Metformina 500 mg",
+      "fecha": "",
+      "hora": "19:00",
+      "hecho": false,
+      "creadoEn": "2026-08-03T12:00:00.000Z"
+    },
+    {
+      "id": 2,
+      "adultoMayorId": 1,
+      "tipo": "otro",
+      "titulo": "Caminata corta",
+      "detalle": "20 minutos por el parque",
+      "fecha": "",
+      "hora": "16:00",
+      "hecho": false,
+      "creadoEn": "2026-08-04T12:00:00.000Z"
+    }
+  ],
+
+  "alertas": [
+    {
+      "id": 1,
+      "adultoMayorId": 1,
       "tipo": "qr",
       "titulo": "Pulsera escaneada",
       "detalle": "Un desconocido escaneo el codigo QR de Claudia",
@@ -101,55 +197,49 @@
       "creadoEn": "2026-08-03T15:12:00.000Z",
       "estado": "atendida",
       "whatsappEnviado": true
-    }
-  ],
-  "nextAlertId": 5,
-  "recordatorios": [
-    {
-      "id": 1,
-      "tipo": "medicamento",
-      "titulo": "Medicamento de la tarde",
-      "detalle": "Losartan 50mg",
-      "hora": "18:00",
-      "hecho": false,
-      "creadoEn": "2026-08-03T12:00:00.000Z",
-      "fecha": ""
     },
     {
       "id": 2,
-      "tipo": "cita",
-      "titulo": "Cita con el cardiologo",
-      "detalle": "Centro médico, consultorio 304",
-      "hora": "10:00",
-      "hecho": false,
-      "creadoEn": "2026-08-04T12:00:00.000Z",
-      "fecha": "2026-09-03"
+      "adultoMayorId": 1,
+      "tipo": "zona",
+      "titulo": "Salio de la zona segura",
+      "detalle": "Claudia salio del perimetro configurado",
+      "lugar": "Calle 181 con Carrera 13",
+      "creadoEn": "2026-08-02T11:03:00.000Z",
+      "estado": "atendida",
+      "whatsappEnviado": true
     }
   ],
-  "nextRecordatorioId": 3,
-  "medicamentos": [
+
+  "zonasSeguras": [
     {
       "id": 1,
-      "nombre": "Losartan",
-      "dosis": "50 mg",
-      "frecuencia": "Una vez al dia",
-      "horario": "08:00",
-      "viaAdministracion": "Oral",
-      "notas": "Tomar con el desayuno",
-      "activo": true,
-      "creadoEn": "2026-08-03T12:00:00.000Z"
-    },
-    {
-      "id": 2,
-      "nombre": "Metformina",
-      "dosis": "500 mg",
-      "frecuencia": "Cada 12 horas",
-      "horario": "07:00 y 19:00",
-      "viaAdministracion": "Oral",
-      "notas": "",
-      "activo": true,
-      "creadoEn": "2026-08-03T12:00:00.000Z"
+      "adultoMayorId": 1,
+      "lat": 4.75793,
+      "lng": -74.03965,
+      "radioM": 300
     }
   ],
-  "nextMedicamentoId": 3
+
+  "monitoreo": [
+    {
+      "adultoMayorId": 1,
+      "status": "presente",
+      "revisadoEn": null,
+      "ubicacion": {
+        "direccion": "Calle 181 #13-54, San Antonio Noroccidental, Bogotá",
+        "lat": 4.75793,
+        "lng": -74.03965,
+        "actualizadoEn": "2026-08-03T15:12:00.000Z"
+      },
+      "seguimiento": {
+        "estaFuera": false,
+        "lecturasFuera": 0,
+        "lecturasDentro": 0,
+        "ultimaLectura": null
+      }
+    }
+  ],
+
+  "sesiones": []
 }

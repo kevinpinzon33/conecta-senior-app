@@ -47,31 +47,128 @@ function loadDb() {
   );
 }
 
-// Un db.json creado por una version anterior puede no tener los campos
-// nuevos. En vez de reventar, los rellenamos con valores por defecto.
+// ── FORMA DE LOS DATOS ────────────────────────────────────────────────
+// Desde el 2026-10-12, db.json imita las tablas del backend real (el ZIP
+// conecta-senior _5-10, archivo _esquema_completo.sql): una coleccion por
+// tabla y las columnas en camelCase. adultoMayor = adulto_mayor,
+// adultoResponsable = adulto_responsable, medicamentoHoras =
+// medicamento_horas, citasMedicas = citas_medicas, etc. Asi, al acoplar
+// la base MySQL, cada coleccion se cambia por su tabla sin traducir nada.
+//
+// Lo que el backend real NO tiene (ubicacion, zona segura, alertas,
+// recordatorios del dia) va en colecciones propias, tambien por
+// adultoMayorId: son la propuesta de tablas nuevas. Ver la seccion 9 de
+// CONTEXTO-CONECTA-SENIOR.md.
+//
+// Los ids se calculan como max+1, igual que un AUTO_INCREMENT.
+
+const COLECCIONES = [
+  "usuarios", "adultoMayor", "adultoResponsable", "informacionMedica",
+  "contactosEmergencia", "medicamentos", "medicamentoHoras", "citasMedicas",
+  "recordatorios", "alertas", "zonasSeguras", "monitoreo", "sesiones",
+];
+
 function normalizarDb(db) {
-  if (!db.recordatorios) db.recordatorios = [];
-  if (!db.nextRecordatorioId) db.nextRecordatorioId = 1;
-  if (!db.usuarios) db.usuarios = [];
-  if (!db.medicamentos) db.medicamentos = [];
-  if (!db.nextMedicamentoId) db.nextMedicamentoId = 1;
-  if (!db.sesiones) db.sesiones = [];
-  if (!db.senior.zonaSegura) {
-    db.senior.zonaSegura = {
-      lat: db.senior.ubicacion.lat,
-      lng: db.senior.ubicacion.lng,
-      radioM: db.senior.zonaSeguraRadioM || 300,
-    };
+  // Un db.json del formato anterior (un unico objeto `senior`) no se
+  // puede leer con este codigo. Se reemplaza por el seed: son datos de
+  // prueba y en Render se regeneran igual en cada despliegue.
+  if (db.senior || !db.adultoMayor) {
+    console.warn("[db] db.json con formato anterior; se regenera desde el seed");
+    conReintentos(() => fs.copyFileSync(SEED_PATH, DB_PATH));
+    db = JSON.parse(conReintentos(() => fs.readFileSync(DB_PATH, "utf-8")));
   }
-  if (!db.senior.seguimiento) {
-    db.senior.seguimiento = {
-      estaFuera: false,
-      lecturasFuera: 0,
-      lecturasDentro: 0,
-      ultimaLectura: null,
-    };
-  }
+  for (const c of COLECCIONES) if (!Array.isArray(db[c])) db[c] = [];
   return db;
+}
+
+function siguienteId(lista) {
+  return lista.reduce((max, x) => Math.max(max, Number(x.id) || 0), 0) + 1;
+}
+
+const deAdulto = (lista, adultoId) =>
+  lista.filter((x) => x.adultoMayorId === adultoId);
+
+/**
+ * Lo que hace falta para vigilar a un adulto mayor: su ficha, su zona
+ * segura y su estado de seguimiento. Devuelve referencias vivas: lo que
+ * se modifique aqui se guarda con saveDb(db). Crea la zona y el
+ * monitoreo si faltan (un adulto recien dado de alta no tiene).
+ */
+function vigilancia(db, adultoId) {
+  const adulto = db.adultoMayor.find((a) => a.id === adultoId);
+  if (!adulto) return null;
+
+  let zona = db.zonasSeguras.find((z) => z.adultoMayorId === adultoId);
+  let mon = db.monitoreo.find((m) => m.adultoMayorId === adultoId);
+  if (!mon) {
+    mon = {
+      adultoMayorId: adultoId,
+      status: "presente",
+      revisadoEn: null,
+      ubicacion: { direccion: "", lat: null, lng: null, actualizadoEn: null },
+      seguimiento: { estaFuera: false, lecturasFuera: 0, lecturasDentro: 0, ultimaLectura: null },
+    };
+    db.monitoreo.push(mon);
+  }
+  if (!zona) {
+    zona = {
+      id: siguienteId(db.zonasSeguras),
+      adultoMayorId: adultoId,
+      lat: mon.ubicacion.lat ?? 4.711,
+      lng: mon.ubicacion.lng ?? -74.0721,
+      radioM: 300,
+    };
+    db.zonasSeguras.push(zona);
+  }
+  return { adulto, zona, mon };
+}
+
+// Sin sesion (simulador de demos) se usa el adulto que pidan o el primero.
+function adultoSinSesion(db, pedido) {
+  const id = Number(pedido);
+  if (id && db.adultoMayor.some((a) => a.id === id)) return id;
+  return db.adultoMayor[0] ? db.adultoMayor[0].id : null;
+}
+
+function edadDesde(fechaNacimiento) {
+  if (!fechaNacimiento) return null;
+  const n = new Date(fechaNacimiento + "T00:00:00");
+  const hoy = new Date();
+  let edad = hoy.getFullYear() - n.getFullYear();
+  const aunNo =
+    hoy.getMonth() < n.getMonth() ||
+    (hoy.getMonth() === n.getMonth() && hoy.getDate() < n.getDate());
+  return aunNo ? edad - 1 : edad;
+}
+
+/**
+ * Lo que recibe el frontend en /api/senior: la ficha del adulto mayor,
+ * su informacion medica y su estado de vigilancia, juntos. En el backend
+ * real son tres tablas (adulto_mayor, informacion_medica y las nuevas de
+ * ubicacion); el frontend no tiene por que saberlo.
+ */
+function vistaSenior(db, adultoId) {
+  const v = vigilancia(db, adultoId);
+  if (!v) return null;
+  const info = db.informacionMedica.find((i) => i.adultoMayorId === adultoId) || {};
+  return {
+    ...v.adulto,
+    nombre: v.adulto.nombreCompleto,
+    edad: edadDesde(v.adulto.fechaNacimiento),
+    tipoSangre: info.tipoSangre || "",
+    condiciones: info.condiciones || "",
+    alergias: info.alergias || "",
+    notasMedicas: info.notas || "",
+    status: v.mon.status,
+    revisadoEn: v.mon.revisadoEn,
+    ubicacion: v.mon.ubicacion,
+    seguimiento: v.mon.seguimiento,
+    zonaSegura: { lat: v.zona.lat, lng: v.zona.lng, radioM: v.zona.radioM },
+  };
+}
+
+function hayAlertasPendientes(db, adultoId) {
+  return deAdulto(db.alertas, adultoId).some((a) => a.estado === "pendiente");
 }
 
 function saveDb(db) {
@@ -85,13 +182,20 @@ app.use(express.static(path.join(__dirname, "public")));
 
 // --- Autenticacion y roles ----------------------------------------------
 //
-// Hay dos roles y cada uno ve una interfaz distinta:
-//   - adulto_mayor        : ve SUS recordatorios, SUS alertas y su estado.
-//   - contacto_emergencia : hace seguimiento del adulto mayor a su cargo.
+// Los roles son los del backend real (usuarios.rol), y cada uno ve una
+// interfaz distinta:
+//   - adulto_mayor       : ve SUS recordatorios, SUS alertas y su estado.
+//   - familiar / cuidador: hacen seguimiento del adulto mayor a su cargo.
+//     (Hasta el 2026-10-12 este rol se llamaba `contacto_emergencia`, que
+//     no existe en el backend real.)
 //
-// El vinculo entre ambos es el campo `seniorId` del usuario. Hoy el
-// prototipo tiene un solo adulto mayor, pero la forma de los datos ya es
-// la correcta para cuando lleguen varios desde la base de datos real.
+// El vinculo es el mismo del backend real:
+//   - El adulto mayor y su usuario comparten id (los dos cuelgan de
+//     `perfiles`), asi que adultoMayor.id === usuarios.id.
+//   - Familiares y cuidadores se enlazan por `adultoResponsable`
+//     (adulto_mayor_id, usuario_id, es_principal).
+// Un contacto de emergencia NO es un usuario: es una fila de
+// contactosEmergencia, alguien a quien llamar, sin cuenta en la app.
 //
 // ┌───────────────────────────────────────────────────────────────────┐
 // │ PENDIENTE ANTES DE CONECTAR DATOS REALES                          │
@@ -126,11 +230,23 @@ function verificarClave(usuarioDb, clave) {
   return usuarioDb.clave === String(clave || "");
 }
 
-function seniorDeUsuario(db, usuario) {
-  // Con la base real aqui se buscaria dentro de una lista de adultos
-  // mayores; hoy solo hay uno y basta con comprobar que sea el suyo.
-  if (!usuario || db.senior.id !== usuario.seniorId) return null;
-  return db.senior;
+const ROLES_CUIDADOR = ["familiar", "cuidador"];
+
+/**
+ * El adulto mayor que ve este usuario. Misma regla que el middleware
+ * del backend real (auth.middleware.js): el propio, si es adulto mayor;
+ * si no, el que tenga en adulto_responsable, primero el principal.
+ * Hoy la interfaz muestra uno solo; con varios habra que elegir.
+ */
+function adultoIdDeUsuario(db, usuario) {
+  if (!usuario) return null;
+  if (usuario.rol === "adulto_mayor") {
+    return db.adultoMayor.some((a) => a.id === usuario.id) ? usuario.id : null;
+  }
+  const vinculos = db.adultoResponsable
+    .filter((r) => r.usuarioId === usuario.id)
+    .sort((a, b) => Number(!!b.esPrincipal) - Number(!!a.esPrincipal));
+  return vinculos[0] ? vinculos[0].adultoMayorId : null;
 }
 
 // --- Sesiones ---
@@ -166,19 +282,21 @@ function usuarioDeLaPeticion(req, db) {
 }
 
 // Nunca devolver la clave al frontend.
-function usuarioPublico(u) {
+function usuarioPublico(db, u) {
   return {
     id: u.id,
     usuario: u.usuario,
     nombre: u.nombre,
     rol: u.rol,
-    seniorId: u.seniorId,
-    contactoId: u.contactoId,
+    adultoMayorId: adultoIdDeUsuario(db, u),
   };
 }
 
 // --- Middlewares ---
 
+// Ademas de comprobar la sesion, deja en req.adultoId el adulto mayor
+// sobre el que trabaja esta peticion. Todas las rutas filtran por el: un
+// familiar nunca ve datos de otra persona.
 function requiereAuth(req, res, next) {
   const db = loadDb();
   const usuario = usuarioDeLaPeticion(req, db);
@@ -186,6 +304,15 @@ function requiereAuth(req, res, next) {
     return res.status(401).json({ error: "Necesitas iniciar sesión" });
   }
   req.usuario = usuario;
+  req.adultoId = adultoIdDeUsuario(db, usuario);
+  next();
+}
+
+// Para las rutas de datos: sin adulto mayor vinculado no hay nada que ver.
+function requiereAdulto(req, res, next) {
+  if (!req.adultoId) {
+    return res.status(403).json({ error: "No tienes un adulto mayor vinculado" });
+  }
   next();
 }
 
@@ -217,7 +344,7 @@ app.post("/api/auth/login", (req, res) => {
   const token = crearSesion(db, usuarioDb);
   saveDb(db);
 
-  res.json({ token, usuario: usuarioPublico(usuarioDb) });
+  res.json({ token, usuario: usuarioPublico(db, usuarioDb) });
 });
 
 app.post("/api/auth/logout", requiereAuth, (req, res) => {
@@ -231,7 +358,7 @@ app.post("/api/auth/logout", requiereAuth, (req, res) => {
 // Lo llama el frontend al abrir la app para saber si la sesion sigue viva
 // y que interfaz mostrar.
 app.get("/api/auth/yo", requiereAuth, (req, res) => {
-  res.json({ usuario: usuarioPublico(req.usuario) });
+  res.json({ usuario: usuarioPublico(loadDb(), req.usuario) });
 });
 
 // --- Configuracion que el frontend necesita saber -------------------------
@@ -274,25 +401,32 @@ app.get("/api/config", requiereAuth, (req, res) => {
 
 // Los dos roles leen los mismos datos del adulto mayor; lo que cambia es
 // como se presentan (ver vista-mayor.js y vista-contacto.js) y que puede
-// hacer cada uno, definido con requiereRol mas abajo.
+// hacer cada uno, definido con requiereRol mas abajo. Todo se filtra por
+// req.adultoId: cada usuario solo ve a SU adulto mayor.
 
-app.get("/api/senior", requiereAuth, (req, res) => {
+app.get("/api/senior", requiereAuth, requiereAdulto, (req, res) => {
   const db = loadDb();
-  const senior = seniorDeUsuario(db, req.usuario);
-  if (!senior) {
+  const vista = vistaSenior(db, req.adultoId);
+  if (!vista) {
     return res.status(403).json({ error: "No tienes acceso a esta persona" });
   }
-  res.json(senior);
+  saveDb(db); // vigilancia() puede haber creado la zona o el monitoreo
+  res.json(vista);
 });
 
-app.get("/api/contactos", requiereAuth, (req, res) => {
+// Ordenados por prioridad (1 = al primero que se avisa), como en el
+// backend real.
+app.get("/api/contactos", requiereAuth, requiereAdulto, (req, res) => {
   const db = loadDb();
-  res.json(db.contactos);
+  const lista = deAdulto(db.contactosEmergencia, req.adultoId).sort(
+    (a, b) => (a.prioridad || 99) - (b.prioridad || 99)
+  );
+  res.json(lista);
 });
 
-app.get("/api/alertas", requiereAuth, (req, res) => {
+app.get("/api/alertas", requiereAuth, requiereAdulto, (req, res) => {
   const db = loadDb();
-  const ordenadas = [...db.alertas].sort(
+  const ordenadas = deAdulto(db.alertas, req.adultoId).sort(
     (a, b) => new Date(b.creadoEn) - new Date(a.creadoEn)
   );
   res.json(ordenadas);
@@ -303,22 +437,24 @@ app.get("/api/alertas", requiereAuth, (req, res) => {
 app.post(
   "/api/alertas/simular-scan",
   requiereAuth,
-  requiereRol("contacto_emergencia"),
+  requiereAdulto,
+  requiereRol(...ROLES_CUIDADOR),
   (req, res) => {
     const db = loadDb();
+    const v = vigilancia(db, req.adultoId);
     const nueva = {
-      id: db.nextAlertId,
+      id: siguienteId(db.alertas),
+      adultoMayorId: req.adultoId,
       tipo: "qr",
       titulo: "Pulsera escaneada",
-      detalle: "Un desconocido escaneo el codigo QR de " + db.senior.nombre,
+      detalle: "Un desconocido escaneo el codigo QR de " + v.adulto.nombreCompleto,
       lugar: "Ubicacion aproximada por GPS del telefono que escaneo",
       creadoEn: new Date().toISOString(),
       estado: "pendiente",
       whatsappEnviado: true,
     };
     db.alertas.push(nueva);
-    db.nextAlertId += 1;
-    db.senior.status = "alerta";
+    v.mon.status = "alerta";
     saveDb(db);
     res.status(201).json(nueva);
   }
@@ -328,14 +464,18 @@ app.post(
 app.post(
   "/api/alertas/:id/marcar-atendida",
   requiereAuth,
-  requiereRol("contacto_emergencia"),
+  requiereAdulto,
+  requiereRol(...ROLES_CUIDADOR),
   (req, res) => {
     const db = loadDb();
-    const alerta = db.alertas.find((a) => a.id === Number(req.params.id));
+    const alerta = deAdulto(db.alertas, req.adultoId).find(
+      (a) => a.id === Number(req.params.id)
+    );
     if (!alerta) return res.status(404).json({ error: "Alerta no encontrada" });
     alerta.estado = "atendida";
-    const hayPendientes = db.alertas.some((a) => a.estado === "pendiente");
-    db.senior.status = hayPendientes ? "alerta" : "presente";
+    vigilancia(db, req.adultoId).mon.status = hayAlertasPendientes(db, req.adultoId)
+      ? "alerta"
+      : "presente";
     saveDb(db);
     res.json(alerta);
   }
@@ -344,15 +484,16 @@ app.post(
 app.post(
   "/api/senior/marcar-visto",
   requiereAuth,
-  requiereRol("contacto_emergencia"),
+  requiereAdulto,
+  requiereRol(...ROLES_CUIDADOR),
   (req, res) => {
     const db = loadDb();
     // Va en su propio campo. Antes pisaba ubicacion.actualizadoEn, y eso
     // hacia pasar una ubicacion de hace horas por una recien leida: justo
     // lo que un cuidador no debe creer.
-    db.senior.revisadoEn = new Date().toISOString();
+    vigilancia(db, req.adultoId).mon.revisadoEn = new Date().toISOString();
     saveDb(db);
-    res.json(db.senior);
+    res.json(vistaSenior(db, req.adultoId));
   }
 );
 
@@ -367,11 +508,12 @@ app.post(
 app.post(
   "/api/senior/zona-segura",
   requiereAuth,
-  requiereRol("contacto_emergencia"),
+  requiereAdulto,
+  requiereRol(...ROLES_CUIDADOR),
   (req, res) => {
     const { lat, lng, radioM } = req.body || {};
     const db = loadDb();
-    const zona = db.senior.zonaSegura;
+    const { zona, mon } = vigilancia(db, req.adultoId);
 
     const hayCentro = typeof lat === "number" || typeof lng === "number";
     if (hayCentro) {
@@ -394,27 +536,21 @@ app.post(
 
     // ultimaLectura se conserva: el guardia de velocidad mide como se
     // mueve la persona, y eso no cambia porque se mueva la zona.
-    const seg = db.senior.seguimiento;
+    const seg = mon.seguimiento;
     seg.estaFuera = false;
     seg.lecturasFuera = 0;
     seg.lecturasDentro = 0;
-    db.senior.status = db.alertas.some((a) => a.estado === "pendiente")
-      ? "alerta"
-      : "presente";
+    mon.status = hayAlertasPendientes(db, req.adultoId) ? "alerta" : "presente";
 
     saveDb(db);
-    res.json(zona);
+    res.json({ lat: zona.lat, lng: zona.lng, radioM: zona.radioM });
   }
 );
 
-// --- Recordatorios -------------------------------------------------------
-// Medicamentos, citas y rutinas del adulto mayor. A diferencia de las
-// alertas (que las dispara el sistema), estos los crea el cuidador a mano
-// desde la pantalla de Inicio.
+// --- Validaciones comunes ------------------------------------------------
 
-const TIPOS_RECORDATORIO = ["medicamento", "cita", "otro"];
+const RE_HORA = /^([01]\d|2[0-3]):[0-5]\d$/;
 
-// Ordena por hora del dia; los ya marcados como hechos se van al final.
 // AAAA-MM-DD y que la fecha exista de verdad: "2026-02-31" cumple el
 // patron pero no es un dia real, y JavaScript la corre al 3 de marzo sin
 // avisar. Una cita medica en un dia equivocado es peor que no tenerla.
@@ -424,6 +560,22 @@ function esFechaValida(texto) {
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === texto;
 }
 
+function limpiarTexto(valor, maximo) {
+  return String(valor == null ? "" : valor).trim().slice(0, maximo);
+}
+
+// --- Recordatorios -------------------------------------------------------
+// Tareas del dia del adulto mayor (tomar algo, una caminata, llamar a
+// alguien). Los crea el cuidador y los marca como hechos el adulto mayor.
+// NO existen en el backend real: es una tabla propia.
+//
+// Las citas medicas ya NO son recordatorios: desde el 2026-10-12 tienen
+// su propia coleccion, citasMedicas, igual que la tabla citas_medicas del
+// backend real (migracion 63).
+
+const TIPOS_RECORDATORIO = ["medicamento", "otro"];
+
+// Ordena por hora del dia; los ya marcados como hechos se van al final.
 function ordenarRecordatorios(lista) {
   return [...lista].sort((a, b) => {
     if (a.hecho !== b.hecho) return a.hecho ? 1 : -1;
@@ -431,9 +583,9 @@ function ordenarRecordatorios(lista) {
   });
 }
 
-app.get("/api/recordatorios", requiereAuth, (req, res) => {
+app.get("/api/recordatorios", requiereAuth, requiereAdulto, (req, res) => {
   const db = loadDb();
-  res.json(ordenarRecordatorios(db.recordatorios || []));
+  res.json(ordenarRecordatorios(deAdulto(db.recordatorios, req.adultoId)));
 });
 
 // Crear y borrar recordatorios es del cuidador; marcarlos como hechos es
@@ -442,40 +594,41 @@ app.get("/api/recordatorios", requiereAuth, (req, res) => {
 app.post(
   "/api/recordatorios",
   requiereAuth,
-  requiereRol("contacto_emergencia"),
+  requiereAdulto,
+  requiereRol(...ROLES_CUIDADOR),
   (req, res) => {
-  const { titulo, detalle, hora, fecha, tipo } = req.body || {};
+    const { titulo, detalle, hora, fecha, tipo } = req.body || {};
 
-  if (!titulo || !String(titulo).trim()) {
-    return res.status(400).json({ error: "El titulo es obligatorio" });
-  }
-  // La hora es opcional, pero si viene tiene que ser HH:MM (24h).
-  if (hora && !/^([01]\d|2[0-3]):[0-5]\d$/.test(hora)) {
-    return res.status(400).json({ error: "La hora debe tener formato HH:MM" });
-  }
-  // La fecha tambien es opcional, pero una cita medica sin dia no sirve
-  // de nada: si viene, tiene que ser una fecha real en formato AAAA-MM-DD.
-  if (fecha && !esFechaValida(fecha)) {
-    return res.status(400).json({ error: "La fecha debe tener formato AAAA-MM-DD" });
-  }
+    if (!titulo || !String(titulo).trim()) {
+      return res.status(400).json({ error: "El titulo es obligatorio" });
+    }
+    if (tipo === "cita") {
+      return res
+        .status(400)
+        .json({ error: "Las citas médicas se registran en Citas, no como recordatorio" });
+    }
+    // La hora es opcional, pero si viene tiene que ser HH:MM (24h).
+    if (hora && !RE_HORA.test(hora)) {
+      return res.status(400).json({ error: "La hora debe tener formato HH:MM" });
+    }
+    if (fecha && !esFechaValida(fecha)) {
+      return res.status(400).json({ error: "La fecha debe tener formato AAAA-MM-DD" });
+    }
 
-  const db = loadDb();
-  if (!db.recordatorios) db.recordatorios = [];
-  if (!db.nextRecordatorioId) db.nextRecordatorioId = 1;
-
-  const nuevo = {
-    id: db.nextRecordatorioId,
-    tipo: TIPOS_RECORDATORIO.includes(tipo) ? tipo : "otro",
-    titulo: String(titulo).trim(),
-    detalle: detalle ? String(detalle).trim() : "",
-    hora: hora || "",
-    fecha: fecha || "",
-    hecho: false,
-    creadoEn: new Date().toISOString(),
-  };
+    const db = loadDb();
+    const nuevo = {
+      id: siguienteId(db.recordatorios),
+      adultoMayorId: req.adultoId,
+      tipo: TIPOS_RECORDATORIO.includes(tipo) ? tipo : "otro",
+      titulo: limpiarTexto(titulo, 80),
+      detalle: limpiarTexto(detalle, 120),
+      fecha: fecha || "",
+      hora: hora || "",
+      hecho: false,
+      creadoEn: new Date().toISOString(),
+    };
 
     db.recordatorios.push(nuevo);
-    db.nextRecordatorioId += 1;
     saveDb(db);
     res.status(201).json(nuevo);
   }
@@ -484,29 +637,33 @@ app.post(
 // Este SI lo pueden usar los dos roles: el adulto mayor marca que ya se
 // tomo la pastilla, y el cuidador tambien puede hacerlo por el.
 // Alterna en vez de solo marcar, para poder deshacer un toque accidental.
-app.post("/api/recordatorios/:id/alternar-hecho", requiereAuth, (req, res) => {
-  const db = loadDb();
-  const rec = (db.recordatorios || []).find(
-    (r) => r.id === Number(req.params.id)
-  );
-  if (!rec) return res.status(404).json({ error: "Recordatorio no encontrado" });
-  rec.hecho = !rec.hecho;
-  saveDb(db);
-  res.json(rec);
-});
+app.post(
+  "/api/recordatorios/:id/alternar-hecho",
+  requiereAuth,
+  requiereAdulto,
+  (req, res) => {
+    const db = loadDb();
+    const rec = deAdulto(db.recordatorios, req.adultoId).find(
+      (r) => r.id === Number(req.params.id)
+    );
+    if (!rec) return res.status(404).json({ error: "Recordatorio no encontrado" });
+    rec.hecho = !rec.hecho;
+    saveDb(db);
+    res.json(rec);
+  }
+);
 
 app.delete(
   "/api/recordatorios/:id",
   requiereAuth,
-  requiereRol("contacto_emergencia"),
+  requiereAdulto,
+  requiereRol(...ROLES_CUIDADOR),
   (req, res) => {
     const db = loadDb();
     const id = Number(req.params.id);
-    const antes = (db.recordatorios || []).length;
-    db.recordatorios = (db.recordatorios || []).filter((r) => r.id !== id);
-    if (db.recordatorios.length === antes) {
-      return res.status(404).json({ error: "Recordatorio no encontrado" });
-    }
+    const rec = deAdulto(db.recordatorios, req.adultoId).find((r) => r.id === id);
+    if (!rec) return res.status(404).json({ error: "Recordatorio no encontrado" });
+    db.recordatorios = db.recordatorios.filter((r) => r !== rec);
     saveDb(db);
     res.json({ ok: true });
   }
@@ -514,116 +671,311 @@ app.delete(
 
 // --- Medicamentos --------------------------------------------------------
 //
-// El tratamiento del adulto mayor: que toma, cuanta dosis y cada cuanto.
-// Los campos son los mismos que la tabla `medicamentos` del backend real
-// (nombre, dosis, frecuencia, horario, via_administracion, activo), para
-// que conectarlo despues sea un mapeo directo y no una traduccion.
+// El tratamiento del adulto mayor. Mismas columnas que la tabla
+// `medicamentos` del backend real (nombre, dosis, frecuencia, horario,
+// via_administracion, fecha_inicio, fecha_fin, notas, activo).
+//
+// ── LAS HORAS VAN APARTE ───────────────────────────────────────────────
+// Igual que la migracion 64 del backend real: cada hora de toma es una
+// fila de medicamentoHoras (medicamento_horas), no un texto libre. Sobre
+// "7:00 AM y 7:00 PM" o "con las comidas" no se puede programar ningun
+// aviso; sobre una lista de horas si. `horario` se sigue rellenando, pero
+// como texto de presentacion derivado de las horas, que es lo que lee el
+// perfil del QR en el backend real.
 //
 // ── POR QUE ESTA SEPARADO DE LOS RECORDATORIOS ─────────────────────────
-// Son dos cosas distintas y mezclarlas se paga caro:
 //   · Un MEDICAMENTO es el tratamiento. Vive mientras el medico lo
 //     mantenga y lo administra el cuidador.
 //   · Un RECORDATORIO es una tarea de hoy que se marca como hecha.
-// Si fueran lo mismo, marcar "ya me la tome" borraria el medicamento de
-// la lista de tratamiento, que es justo lo que no debe pasar.
+// Si fueran lo mismo, marcar "ya me la tome" borraria el medicamento.
 //
 // Un medicamento no se borra al suspenderlo: se marca `activo: false`.
 // El historial de lo que tomo alguien es informacion clinica.
 
-function limpiarTexto(valor, maximo) {
-  return String(valor == null ? "" : valor).trim().slice(0, maximo);
+function horaLegible(hhmm) {
+  const [h, m] = hhmm.split(":").map(Number);
+  const sufijo = h < 12 ? "a. m." : "p. m.";
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${String(m).padStart(2, "0")} ${sufijo}`;
 }
 
-app.get("/api/medicamentos", requiereAuth, (req, res) => {
+function horarioDesdeHoras(horas) {
+  const partes = horas.map(horaLegible);
+  if (partes.length <= 1) return partes.join("");
+  return partes.slice(0, -1).join(", ") + " y " + partes[partes.length - 1];
+}
+
+/** Valida y ordena la lista de horas. Devuelve { horas } o { error }. */
+function leerHoras(valor) {
+  if (valor == null) return { horas: null };
+  if (!Array.isArray(valor)) return { error: "Las horas deben ser una lista" };
+  const horas = [...new Set(valor.map((h) => String(h).trim()).filter(Boolean))];
+  if (horas.some((h) => !RE_HORA.test(h))) {
+    return { error: "Cada hora debe tener formato HH:MM" };
+  }
+  if (horas.length > 8) return { error: "Máximo 8 horas de toma" };
+  return { horas: horas.sort() };
+}
+
+function guardarHoras(db, med, horas) {
+  db.medicamentoHoras = db.medicamentoHoras.filter((h) => h.medicamentoId !== med.id);
+  for (const hora of horas) {
+    db.medicamentoHoras.push({
+      id: siguienteId(db.medicamentoHoras),
+      medicamentoId: med.id,
+      hora,
+    });
+  }
+  med.horario = horarioDesdeHoras(horas);
+}
+
+function conHoras(db, med) {
+  const horas = db.medicamentoHoras
+    .filter((h) => h.medicamentoId === med.id)
+    .map((h) => h.hora)
+    .sort();
+  return { ...med, horas };
+}
+
+function leerFechaOpcional(valor, nombre) {
+  if (valor == null || valor === "") return { fecha: null };
+  if (!esFechaValida(String(valor))) {
+    return { error: `${nombre} debe tener formato AAAA-MM-DD` };
+  }
+  return { fecha: String(valor) };
+}
+
+app.get("/api/medicamentos", requiereAuth, requiereAdulto, (req, res) => {
   const db = loadDb();
-  const lista = [...(db.medicamentos || [])].sort((a, b) => {
-    // Los suspendidos al final; el resto por nombre.
-    if (!!a.activo !== !!b.activo) return a.activo ? -1 : 1;
-    return String(a.nombre).localeCompare(String(b.nombre), "es");
-  });
+  const lista = deAdulto(db.medicamentos, req.adultoId)
+    .map((m) => conHoras(db, m))
+    .sort((a, b) => {
+      // Los suspendidos al final; el resto por nombre.
+      if (!!a.activo !== !!b.activo) return a.activo ? -1 : 1;
+      return String(a.nombre).localeCompare(String(b.nombre), "es");
+    });
   res.json(lista);
 });
 
 app.post(
   "/api/medicamentos",
   requiereAuth,
-  requiereRol("contacto_emergencia"),
+  requiereAdulto,
+  requiereRol(...ROLES_CUIDADOR),
   (req, res) => {
-    const { nombre, dosis, frecuencia, horario, viaAdministracion, notas } =
-      req.body || {};
-
-    if (!nombre || !String(nombre).trim()) {
+    const c = req.body || {};
+    if (!c.nombre || !String(c.nombre).trim()) {
       return res.status(400).json({ error: "El nombre del medicamento es obligatorio" });
+    }
+    const h = leerHoras(c.horas);
+    const ini = leerFechaOpcional(c.fechaInicio, "La fecha de inicio");
+    const fin = leerFechaOpcional(c.fechaFin, "La fecha de fin");
+    const fallo = h.error || ini.error || fin.error;
+    if (fallo) return res.status(400).json({ error: fallo });
+    if (ini.fecha && fin.fecha && fin.fecha < ini.fecha) {
+      return res.status(400).json({ error: "La fecha de fin es anterior a la de inicio" });
     }
 
     const db = loadDb();
     const nuevo = {
-      id: db.nextMedicamentoId,
-      nombre: limpiarTexto(nombre, 150),
-      dosis: limpiarTexto(dosis, 100),
-      frecuencia: limpiarTexto(frecuencia, 100),
-      horario: limpiarTexto(horario, 100),
-      viaAdministracion: limpiarTexto(viaAdministracion, 100),
-      notas: limpiarTexto(notas, 300),
+      id: siguienteId(db.medicamentos),
+      adultoMayorId: req.adultoId,
+      nombre: limpiarTexto(c.nombre, 150),
+      dosis: limpiarTexto(c.dosis, 100),
+      frecuencia: limpiarTexto(c.frecuencia, 100),
+      horario: "",
+      viaAdministracion: limpiarTexto(c.viaAdministracion, 100),
+      fechaInicio: ini.fecha,
+      fechaFin: fin.fecha,
+      notas: limpiarTexto(c.notas, 300),
       activo: true,
-      creadoEn: new Date().toISOString(),
+      fechaCreacion: new Date().toISOString(),
     };
-
     db.medicamentos.push(nuevo);
-    db.nextMedicamentoId += 1;
+    guardarHoras(db, nuevo, h.horas || []);
     saveDb(db);
-    res.status(201).json(nuevo);
+    res.status(201).json(conHoras(db, nuevo));
   }
 );
 
 app.put(
   "/api/medicamentos/:id",
   requiereAuth,
-  requiereRol("contacto_emergencia"),
+  requiereAdulto,
+  requiereRol(...ROLES_CUIDADOR),
   (req, res) => {
     const db = loadDb();
-    const med = (db.medicamentos || []).find(
+    const med = deAdulto(db.medicamentos, req.adultoId).find(
       (m) => m.id === Number(req.params.id)
     );
     if (!med) return res.status(404).json({ error: "Medicamento no encontrado" });
 
     const c = req.body || {};
-    if (c.nombre !== undefined) {
-      if (!String(c.nombre).trim()) {
-        return res.status(400).json({ error: "El nombre del medicamento es obligatorio" });
-      }
-      med.nombre = limpiarTexto(c.nombre, 150);
+    if (c.nombre !== undefined && !String(c.nombre).trim()) {
+      return res.status(400).json({ error: "El nombre del medicamento es obligatorio" });
     }
+    const h = leerHoras(c.horas);
+    const ini = c.fechaInicio !== undefined ? leerFechaOpcional(c.fechaInicio, "La fecha de inicio") : {};
+    const fin = c.fechaFin !== undefined ? leerFechaOpcional(c.fechaFin, "La fecha de fin") : {};
+    const fallo = h.error || ini.error || fin.error;
+    if (fallo) return res.status(400).json({ error: fallo });
+
+    if (c.nombre !== undefined) med.nombre = limpiarTexto(c.nombre, 150);
     if (c.dosis !== undefined) med.dosis = limpiarTexto(c.dosis, 100);
     if (c.frecuencia !== undefined) med.frecuencia = limpiarTexto(c.frecuencia, 100);
-    if (c.horario !== undefined) med.horario = limpiarTexto(c.horario, 100);
     if (c.viaAdministracion !== undefined)
       med.viaAdministracion = limpiarTexto(c.viaAdministracion, 100);
     if (c.notas !== undefined) med.notas = limpiarTexto(c.notas, 300);
+    if (c.fechaInicio !== undefined) med.fechaInicio = ini.fecha;
+    if (c.fechaFin !== undefined) med.fechaFin = fin.fecha;
+    if (med.fechaInicio && med.fechaFin && med.fechaFin < med.fechaInicio) {
+      return res.status(400).json({ error: "La fecha de fin es anterior a la de inicio" });
+    }
+    if (h.horas) guardarHoras(db, med, h.horas);
     // Suspender o retomar un tratamiento.
     if (c.activo !== undefined) med.activo = !!c.activo;
 
     saveDb(db);
-    res.json(med);
+    res.json(conHoras(db, med));
   }
 );
 
 app.delete(
   "/api/medicamentos/:id",
   requiereAuth,
-  requiereRol("contacto_emergencia"),
+  requiereAdulto,
+  requiereRol(...ROLES_CUIDADOR),
   (req, res) => {
     const db = loadDb();
     const id = Number(req.params.id);
-    const antes = (db.medicamentos || []).length;
-    db.medicamentos = (db.medicamentos || []).filter((m) => m.id !== id);
-    if (db.medicamentos.length === antes) {
-      return res.status(404).json({ error: "Medicamento no encontrado" });
-    }
+    const med = deAdulto(db.medicamentos, req.adultoId).find((m) => m.id === id);
+    if (!med) return res.status(404).json({ error: "Medicamento no encontrado" });
+    db.medicamentos = db.medicamentos.filter((m) => m !== med);
+    // ON DELETE CASCADE, como la FK de medicamento_horas.
+    db.medicamentoHoras = db.medicamentoHoras.filter((h) => h.medicamentoId !== id);
     saveDb(db);
     res.json({ ok: true });
   }
 );
+
+// --- Citas medicas -------------------------------------------------------
+//
+// Mismas columnas que la tabla citas_medicas del backend real (migracion
+// 63): especialidad, profesional, institucion, direccion, notas,
+// fecha_hora, estado (programada | cumplida | cancelada), antelaciones.
+// `fechaHora` va como "AAAA-MM-DDTHH:MM", hora local de Colombia, igual
+// que un DATETIME de MySQL.
+//
+// En el backend real especialidad, profesional, institucion, direccion y
+// notas van CIFRADOS (AES-256-GCM): son datos de salud. Aqui van en claro
+// porque son inventados; al acoplar se leen por su repositorio.
+//
+// La crea y la edita el cuidador; las ven los dos.
+
+const ESTADOS_CITA = ["programada", "cumplida", "cancelada"];
+const RE_FECHA_HORA = /^(\d{4}-\d{2}-\d{2})T([01]\d|2[0-3]):[0-5]\d$/;
+
+function leerCita(c, parcial) {
+  const datos = {};
+  if (!parcial || c.especialidad !== undefined) {
+    if (!c.especialidad || !String(c.especialidad).trim()) {
+      return { error: "La especialidad es obligatoria" };
+    }
+    datos.especialidad = limpiarTexto(c.especialidad, 120);
+  }
+  if (!parcial || c.fechaHora !== undefined) {
+    const m = RE_FECHA_HORA.exec(String(c.fechaHora || ""));
+    if (!m || !esFechaValida(m[1])) {
+      return { error: "La fecha y la hora de la cita son obligatorias" };
+    }
+    datos.fechaHora = String(c.fechaHora);
+  }
+  for (const [campo, max] of [
+    ["profesional", 120], ["institucion", 150], ["direccion", 200], ["notas", 400],
+  ]) {
+    if (!parcial || c[campo] !== undefined) datos[campo] = limpiarTexto(c[campo], max);
+  }
+  if (c.estado !== undefined) {
+    if (!ESTADOS_CITA.includes(c.estado)) return { error: "Estado de cita no válido" };
+    datos.estado = c.estado;
+  }
+  return { datos };
+}
+
+// Las programadas primero, de la mas proxima a la mas lejana; despues el
+// resto, de la mas reciente a la mas vieja.
+function ordenarCitas(lista) {
+  return [...lista].sort((a, b) => {
+    const pa = a.estado === "programada", pb = b.estado === "programada";
+    if (pa !== pb) return pa ? -1 : 1;
+    return pa ? a.fechaHora.localeCompare(b.fechaHora) : b.fechaHora.localeCompare(a.fechaHora);
+  });
+}
+
+app.get("/api/citas", requiereAuth, requiereAdulto, (req, res) => {
+  const db = loadDb();
+  res.json(ordenarCitas(deAdulto(db.citasMedicas, req.adultoId)));
+});
+
+app.post(
+  "/api/citas",
+  requiereAuth,
+  requiereAdulto,
+  requiereRol(...ROLES_CUIDADOR),
+  (req, res) => {
+    const { datos, error } = leerCita(req.body || {}, false);
+    if (error) return res.status(400).json({ error });
+    const db = loadDb();
+    const nueva = {
+      id: siguienteId(db.citasMedicas),
+      adultoMayorId: req.adultoId,
+      ...datos,
+      estado: datos.estado || "programada",
+      antelaciones: null,
+      creadoPor: req.usuario.id,
+      creadoEn: new Date().toISOString(),
+    };
+    db.citasMedicas.push(nueva);
+    saveDb(db);
+    res.status(201).json(nueva);
+  }
+);
+
+app.put(
+  "/api/citas/:id",
+  requiereAuth,
+  requiereAdulto,
+  requiereRol(...ROLES_CUIDADOR),
+  (req, res) => {
+    const db = loadDb();
+    const cita = deAdulto(db.citasMedicas, req.adultoId).find(
+      (c) => c.id === Number(req.params.id)
+    );
+    if (!cita) return res.status(404).json({ error: "Cita no encontrada" });
+    const { datos, error } = leerCita(req.body || {}, true);
+    if (error) return res.status(400).json({ error });
+    Object.assign(cita, datos, { actualizadoEn: new Date().toISOString() });
+    saveDb(db);
+    res.json(cita);
+  }
+);
+
+app.delete(
+  "/api/citas/:id",
+  requiereAuth,
+  requiereAdulto,
+  requiereRol(...ROLES_CUIDADOR),
+  (req, res) => {
+    const db = loadDb();
+    const id = Number(req.params.id);
+    const cita = deAdulto(db.citasMedicas, req.adultoId).find((c) => c.id === id);
+    if (!cita) return res.status(404).json({ error: "Cita no encontrada" });
+    db.citasMedicas = db.citasMedicas.filter((c) => c !== cita);
+    saveDb(db);
+    res.json({ ok: true });
+  }
+);
+
 
 // --- Zona segura (geocerca) ----------------------------------------------
 //
@@ -663,9 +1015,10 @@ function distanciaMetros(lat1, lng1, lat2, lng2) {
   return 2 * R * Math.asin(Math.sqrt(a));
 }
 
-function crearAlertaZona(db, { titulo, detalle, lugar, estado }) {
+function crearAlertaZona(db, adultoId, { titulo, detalle, lugar, estado }) {
   const alerta = {
-    id: db.nextAlertId,
+    id: siguienteId(db.alertas),
+    adultoMayorId: adultoId,
     tipo: "zona",
     titulo,
     detalle,
@@ -675,14 +1028,13 @@ function crearAlertaZona(db, { titulo, detalle, lugar, estado }) {
     whatsappEnviado: true,
   };
   db.alertas.push(alerta);
-  db.nextAlertId += 1;
   return alerta;
 }
 
 // Devuelve que hacer con una lectura, y modifica db si corresponde.
-function evaluarUbicacion(db, { lat, lng, precision }) {
-  const zona = db.senior.zonaSegura;
-  const seg = db.senior.seguimiento;
+function evaluarUbicacion(db, adultoId, { lat, lng, precision }) {
+  const { adulto, zona, mon } = vigilancia(db, adultoId);
+  const seg = mon.seguimiento;
   const ahora = new Date();
 
   // Defensa 1: lecturas imprecisas no sirven para decidir nada.
@@ -731,15 +1083,15 @@ function evaluarUbicacion(db, { lat, lng, precision }) {
         seg.estaFuera = true;
         seg.lecturasFuera = 0;
         evento = "salida";
-        alerta = crearAlertaZona(db, {
+        alerta = crearAlertaZona(db, adultoId, {
           titulo: "Salió de la zona segura",
-          detalle: `${db.senior.nombre} está a ${Math.round(
+          detalle: `${adulto.nombreCompleto} está a ${Math.round(
             distancia
           )} m del centro de su zona segura (radio ${zona.radioM} m)`,
           lugar: `${lat.toFixed(5)}, ${lng.toFixed(5)}`,
           estado: "pendiente",
         });
-        db.senior.status = "alerta";
+        mon.status = "alerta";
       }
     } else {
       seg.lecturasFuera = 0;
@@ -752,25 +1104,22 @@ function evaluarUbicacion(db, { lat, lng, precision }) {
         seg.estaFuera = false;
         seg.lecturasDentro = 0;
         evento = "regreso";
-        alerta = crearAlertaZona(db, {
+        alerta = crearAlertaZona(db, adultoId, {
           titulo: "Volvió a la zona segura",
-          detalle: `${db.senior.nombre} está de nuevo dentro de su zona segura`,
+          detalle: `${adulto.nombreCompleto} está de nuevo dentro de su zona segura`,
           lugar: `${lat.toFixed(5)}, ${lng.toFixed(5)}`,
           estado: "atendida",
         });
-        const quedanPendientes = db.alertas.some(
-          (a) => a.estado === "pendiente"
-        );
-        db.senior.status = quedanPendientes ? "alerta" : "presente";
+        mon.status = hayAlertasPendientes(db, adultoId) ? "alerta" : "presente";
       }
     } else {
       seg.lecturasDentro = 0;
     }
   }
 
-  db.senior.ubicacion.lat = lat;
-  db.senior.ubicacion.lng = lng;
-  db.senior.ubicacion.actualizadoEn = ahora.toISOString();
+  mon.ubicacion.lat = lat;
+  mon.ubicacion.lng = lng;
+  mon.ubicacion.actualizadoEn = ahora.toISOString();
   seg.ultimaLectura = { lat, lng, en: ahora.toISOString() };
 
   return {
@@ -969,16 +1318,17 @@ function necesitaDireccion(ubicacion, lat, lng) {
  * Se vuelve a leer la base antes de escribir porque entre la peticion y
  * la respuesta pueden haber entrado lecturas nuevas.
  */
-function actualizarDireccionEnSegundoPlano(lat, lng) {
+function actualizarDireccionEnSegundoPlano(adultoId, lat, lng) {
   geocodificarInverso(lat, lng)
     .then((r) => {
       if (!r) return; // frenado por el intervalo minimo; ya se reintentara
       const db = loadDb();
-      db.senior.ubicacion.direccion = r.texto;
-      db.senior.ubicacion.direccionLat = lat;
-      db.senior.ubicacion.direccionLng = lng;
-      db.senior.ubicacion.direccionEn = new Date().toISOString();
-      db.senior.ubicacion.direccionFallo = null;
+      const ubic = vigilancia(db, adultoId).mon.ubicacion;
+      ubic.direccion = r.texto;
+      ubic.direccionLat = lat;
+      ubic.direccionLng = lng;
+      ubic.direccionEn = new Date().toISOString();
+      ubic.direccionFallo = null;
       saveDb(db);
       console.log(`[ubicacion] Direccion (${r.proveedor}): ${r.texto}`);
     })
@@ -992,7 +1342,7 @@ function actualizarDireccionEnSegundoPlano(lat, lng) {
       // formato de la respuesta.
       try {
         const db = loadDb();
-        db.senior.ubicacion.direccionFallo = {
+        vigilancia(db, adultoId).mon.ubicacion.direccionFallo = {
           motivo: String(err.message).slice(0, 300),
           cuando: new Date().toISOString(),
         };
@@ -1005,11 +1355,13 @@ function actualizarDireccionEnSegundoPlano(lat, lng) {
 // Es a proposito, para que el simulador funcione en demos sin tener que
 // iniciar sesion. Antes de conectar datos reales hay que protegerlos: el
 // de ubicacion deberia exigir la sesion del propio adulto mayor, y los de
-// simulador deberian desaparecer.
+// simulador deberian desaparecer. Sin sesion trabajan sobre el adulto
+// mayor que digan (`adultoMayorId` en el cuerpo o en la consulta) o, si
+// no dicen nada, sobre el primero.
 
-// Aqui reportaria el telefono del adulto mayor (hoy lo usa el simulador).
+// Aqui reporta el telefono del adulto mayor (y el simulador, sin sesion).
 app.post("/api/ubicacion", (req, res) => {
-  const { lat, lng, precision, fuente } = req.body || {};
+  const { lat, lng, precision, fuente, adultoMayorId } = req.body || {};
 
   if (typeof lat !== "number" || typeof lng !== "number") {
     return res.status(400).json({ error: "lat y lng deben ser numeros" });
@@ -1020,110 +1372,133 @@ app.post("/api/ubicacion", (req, res) => {
 
   const db = loadDb();
 
-  // Si la peticion trae sesion, tiene que ser la del PROPIO adulto mayor.
-  // Un cuidador no puede mover la ubicacion de la persona a su cargo: seria
-  // poder fabricar una salida de zona segura, o taparla.
-  //
-  // Sin sesion se sigue aceptando porque el simulador de demos no inicia
-  // sesion (ver el bloque PENDIENTE del principio del archivo).
+  // Si la peticion trae sesion, tiene que ser la del PROPIO adulto mayor,
+  // y reporta por si mismo. Un cuidador no puede mover la ubicacion de la
+  // persona a su cargo: seria poder fabricar una salida de zona segura, o
+  // taparla.
   const usuario = usuarioDeLaPeticion(req, db);
   if (usuario && usuario.rol !== "adulto_mayor") {
     return res
       .status(403)
       .json({ error: "Solo el adulto mayor puede reportar su ubicación" });
   }
-  if (usuario && db.senior.id !== usuario.seniorId) {
-    return res.status(403).json({ error: "No puedes reportar por otra persona" });
+  const adultoId = usuario
+    ? adultoIdDeUsuario(db, usuario)
+    : adultoSinSesion(db, adultoMayorId);
+  if (!adultoId) {
+    return res.status(403).json({ error: "No hay un adulto mayor para esta lectura" });
   }
 
-  const resultado = evaluarUbicacion(db, { lat, lng, precision });
+  const resultado = evaluarUbicacion(db, adultoId, { lat, lng, precision });
+  const { zona, mon } = vigilancia(db, adultoId);
 
   // De donde vino la lectura. El panel del cuidador necesita distinguir
   // "esto es el GPS del telefono de mi mama, ahora mismo" de "esto es el
   // dato de ejemplo con el que arranca la app".
   if (resultado.aceptada) {
-    const esGps = fuente === "gps" || (usuario && usuario.rol === "adulto_mayor");
-    db.senior.ubicacion.fuente = esGps ? "gps" : "simulador";
-    db.senior.ubicacion.precision =
+    const esGps = fuente === "gps" || !!usuario;
+    mon.ubicacion.fuente = esGps ? "gps" : "simulador";
+    mon.ubicacion.precision =
       typeof precision === "number" ? Math.round(precision) : null;
     if (esGps) {
       // La direccion del seed es inventada; dejarla puesta junto a unas
       // coordenadas reales haria creer que la persona esta en una calle
       // donde no esta. Se pone un texto neutro hasta que llegue la real.
-      if (necesitaDireccion(db.senior.ubicacion, lat, lng)) {
-        if (!db.senior.ubicacion.direccionLat) {
-          db.senior.ubicacion.direccion = "Buscando la dirección…";
+      if (necesitaDireccion(mon.ubicacion, lat, lng)) {
+        if (!mon.ubicacion.direccionLat) {
+          mon.ubicacion.direccion = "Buscando la dirección…";
         }
-        // Sin await: la respuesta al telefono no espera a Nominatim.
-        actualizarDireccionEnSegundoPlano(lat, lng);
+        // Sin await: la respuesta al telefono no espera a Photon.
+        actualizarDireccionEnSegundoPlano(adultoId, lat, lng);
       }
     }
   }
 
   saveDb(db);
-  res.json({ ...resultado, config: GEOCERCA, zonaSegura: db.senior.zonaSegura });
+  res.json({
+    ...resultado,
+    config: GEOCERCA,
+    zonaSegura: { lat: zona.lat, lng: zona.lng, radioM: zona.radioM },
+  });
 });
 
 app.get("/api/zona-segura", (req, res) => {
   const db = loadDb();
+  const adultoId = adultoSinSesion(db, req.query.adultoMayorId);
+  if (!adultoId) return res.status(404).json({ error: "No hay adultos mayores" });
+  const { zona, mon } = vigilancia(db, adultoId);
   res.json({
-    ...db.senior.zonaSegura,
+    lat: zona.lat,
+    lng: zona.lng,
+    radioM: zona.radioM,
     config: GEOCERCA,
-    seguimiento: db.senior.seguimiento,
-    ubicacionActual: db.senior.ubicacion,
+    seguimiento: mon.seguimiento,
+    ubicacionActual: mon.ubicacion,
   });
 });
 
 app.post("/api/zona-segura", (req, res) => {
-  const { lat, lng, radioM } = req.body || {};
+  const { lat, lng, radioM, adultoMayorId } = req.body || {};
   const db = loadDb();
+  const adultoId = adultoSinSesion(db, adultoMayorId);
+  if (!adultoId) return res.status(404).json({ error: "No hay adultos mayores" });
+  const { zona } = vigilancia(db, adultoId);
 
-  if (typeof lat === "number") db.senior.zonaSegura.lat = lat;
-  if (typeof lng === "number") db.senior.zonaSegura.lng = lng;
+  if (typeof lat === "number") zona.lat = lat;
+  if (typeof lng === "number") zona.lng = lng;
   if (typeof radioM === "number") {
     if (radioM < 50 || radioM > 5000) {
       return res
         .status(400)
         .json({ error: "El radio debe estar entre 50 y 5000 m" });
     }
-    db.senior.zonaSegura.radioM = radioM;
+    zona.radioM = radioM;
   }
 
   saveDb(db);
-  res.json(db.senior.zonaSegura);
+  res.json({ lat: zona.lat, lng: zona.lng, radioM: zona.radioM });
 });
 
 // Deja todo como al principio para poder repetir una demo.
 app.post("/api/simulador/reiniciar", (req, res) => {
   const db = loadDb();
-  db.senior.seguimiento = {
+  const adultoId = adultoSinSesion(db, (req.body || {}).adultoMayorId);
+  if (!adultoId) return res.status(404).json({ error: "No hay adultos mayores" });
+  const { zona, mon } = vigilancia(db, adultoId);
+
+  mon.seguimiento = {
     estaFuera: false,
     lecturasFuera: 0,
     lecturasDentro: 0,
     ultimaLectura: null,
   };
-  db.senior.ubicacion.lat = db.senior.zonaSegura.lat;
-  db.senior.ubicacion.lng = db.senior.zonaSegura.lng;
-  db.senior.ubicacion.actualizadoEn = new Date().toISOString();
-  // Tambien el origen: si no, tras una prueba con GPS real el panel
-  // seguiria diciendo "EN VIVO" sobre una posicion que ya es de mentira.
-  db.senior.ubicacion.fuente = "simulador";
-  db.senior.ubicacion.precision = null;
-  db.senior.ubicacion.direccion = JSON.parse(
-    fs.readFileSync(SEED_PATH, "utf-8")
-  ).senior.ubicacion.direccion;
-  // Y la direccion resuelta, o la siguiente lectura no volveria a
-  // preguntarla por creer que ya la tiene.
-  db.senior.ubicacion.direccionLat = null;
-  db.senior.ubicacion.direccionLng = null;
-  db.senior.ubicacion.direccionEn = null;
-  db.alertas = db.alertas.filter((a) => a.tipo !== "zona");
-  db.senior.status = db.alertas.some((a) => a.estado === "pendiente")
-    ? "alerta"
-    : "presente";
+  const monSeed = JSON.parse(fs.readFileSync(SEED_PATH, "utf-8")).monitoreo.find(
+    (m) => m.adultoMayorId === adultoId
+  );
+  mon.ubicacion = {
+    // La direccion de ejemplo del seed, si la hay.
+    direccion: monSeed ? monSeed.ubicacion.direccion : "",
+    lat: zona.lat,
+    lng: zona.lng,
+    actualizadoEn: new Date().toISOString(),
+    // Tambien el origen: si no, tras una prueba con GPS real el panel
+    // seguiria diciendo "EN VIVO" sobre una posicion que ya es de mentira.
+    fuente: "simulador",
+    precision: null,
+    // Y la direccion resuelta, o la siguiente lectura no volveria a
+    // preguntarla por creer que ya la tiene.
+    direccionLat: null,
+    direccionLng: null,
+    direccionEn: null,
+  };
+  db.alertas = db.alertas.filter(
+    (a) => !(a.adultoMayorId === adultoId && a.tipo === "zona")
+  );
+  mon.status = hayAlertasPendientes(db, adultoId) ? "alerta" : "presente";
   saveDb(db);
   res.json({ ok: true });
 });
+
 
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`\nConecta Senior corriendo en:`);

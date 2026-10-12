@@ -886,3 +886,31 @@ body.en-login #screen { display: flex; align-items: center; }
 .aviso-acciones { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 
 .simulate-bar button.btn-notif { background: var(--noche); color: var(--bg); }
+
+/* --- Citas medicas --- */
+.cita-card {
+  display: flex; gap: 12px; align-items: flex-start;
+  background: var(--panel); border: 1px solid var(--linea);
+  border-radius: 16px; padding: 14px;
+}
+.cita-card.cancelada, .cita-card.cumplida { opacity: 0.6; }
+.cita-body { flex: 1; min-width: 0; }
+.cita-body .title { font-size: 14px; font-weight: 600; margin: 0; }
+.cita-body .sub { font-size: 12.5px; color: var(--texto-muted); margin: 3px 0 0; }
+.cita-body .cita-cuando { color: var(--noche); font-weight: 600; }
+.cita-estado {
+  font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+  color: var(--texto-muted); margin-left: 4px;
+}
+
+/* --- Formularios: dos campos en una fila y horas de toma --- */
+.fila-2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+.fila-2 input { min-width: 0; }
+.horas-toma { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
+.hora-fila { display: flex; gap: 8px; align-items: center; }
+.hora-fila input { margin-bottom: 0; flex: 1; }
+.hora-fila button {
+  background: var(--panel-alt); border: 1px solid var(--linea); border-radius: 12px;
+  color: var(--texto-muted); padding: 11px 12px; cursor: pointer;
+}
+.horas-agregar { margin-bottom: 16px; }

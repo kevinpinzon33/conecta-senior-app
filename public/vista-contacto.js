@@ -73,7 +73,7 @@ function abrirFormRecordatorio() {
       <label for="recDetalle">Detalle <span>(opcional)</span></label>
       <input id="recDetalle" type="text" maxlength="120" placeholder="Losartán 50mg" />
 
-      <label for="recFecha">Fecha <span>(opcional, para citas médicas)</span></label>
+      <label for="recFecha">Fecha <span>(opcional)</span></label>
       <input id="recFecha" type="date" />
 
       <label for="recHora">Hora <span>(opcional)</span></label>
@@ -171,6 +171,196 @@ function abrirFormRecordatorio() {
   inputTitulo.focus();
 }
 
+// ── Citas médicas ─────────────────────────────────────────────────
+// Desde el 2026-10-12 tienen su propia lista, como la tabla citas_medicas
+// del backend real. Antes eran un recordatorio de tipo "cita" con texto
+// libre, y no habia donde poner especialidad, profesional ni institucion.
+
+function renderListaCitas() {
+  if (!state.citas.length) {
+    return `<p class="empty-hint">No hay citas médicas registradas.</p>`;
+  }
+
+  const filas = state.citas
+    .map((c) => {
+      const estado = ESTADOS_CITA[c.estado] || ESTADOS_CITA.programada;
+      const lugar = [c.institucion, c.direccion].filter(Boolean).join(" · ");
+      return `
+      <div class="cita-card ${c.estado}">
+        <div class="icon-badge" style="background:${estado.color}18;color:${estado.color}">${ICONS.cita}</div>
+        <div class="cita-body">
+          <p class="title">${esc(c.especialidad)}${
+            c.estado !== "programada"
+              ? ` <span class="cita-estado">${estado.etiqueta}</span>`
+              : ""
+          }</p>
+          <p class="sub cita-cuando">${esc(fmtFechaHoraCita(c.fechaHora))}</p>
+          ${c.profesional ? `<p class="sub">${esc(c.profesional)}</p>` : ""}
+          ${lugar ? `<p class="sub">${esc(lugar)}</p>` : ""}
+          ${c.notas ? `<p class="sub">${esc(c.notas)}</p>` : ""}
+        </div>
+        <div class="med-acciones">
+          <button data-cita-editar="${c.id}" aria-label="Editar cita">${ICONS.lapiz}</button>
+          <button data-cita-borrar="${c.id}" aria-label="Eliminar cita">${ICONS.basura}</button>
+        </div>
+      </div>`;
+    })
+    .join("");
+
+  return `<div class="med-lista">${filas}</div>`;
+}
+
+function conectarEventosCitas() {
+  const btn = document.getElementById("btnAgregarCita");
+  if (btn) btn.onclick = () => abrirFormCita(null);
+
+  screenEl.querySelectorAll("[data-cita-editar]").forEach((b) => {
+    b.onclick = () => {
+      const cita = state.citas.find((c) => c.id === Number(b.dataset.citaEditar));
+      if (cita) abrirFormCita(cita);
+    };
+  });
+  screenEl.querySelectorAll("[data-cita-borrar]").forEach((b) => {
+    b.onclick = async () => {
+      if (!confirm("¿Eliminar esta cita?")) return;
+      await api(`/citas/${b.dataset.citaBorrar}`, { method: "DELETE" });
+      refreshAll();
+    };
+  });
+}
+
+// Crea y edita. Al editar se puede marcar como cumplida o cancelada; no
+// se borra, para que quede el historial de consultas.
+function abrirFormCita(cita) {
+  const editando = !!cita;
+  const [fecha, hora] = editando ? cita.fechaHora.split("T") : ["", ""];
+  let estadoElegido = editando ? cita.estado : "programada";
+
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = `
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="citaTitle">
+      <h2 id="citaTitle">${editando ? "Editar cita" : "Nueva cita médica"}</h2>
+
+      <label for="citaEsp">Especialidad</label>
+      <input id="citaEsp" type="text" maxlength="120" placeholder="Cardiología"
+             value="${esc(editando ? cita.especialidad : "")}" />
+
+      <div class="fila-2">
+        <div>
+          <label for="citaFecha">Fecha</label>
+          <input id="citaFecha" type="date" value="${esc(fecha)}" />
+        </div>
+        <div>
+          <label for="citaHora">Hora</label>
+          <input id="citaHora" type="time" value="${esc(hora)}" />
+        </div>
+      </div>
+
+      <label for="citaProf">Profesional <span>(opcional)</span></label>
+      <input id="citaProf" type="text" maxlength="120" placeholder="Dra. Paula Ríos"
+             value="${esc(editando ? cita.profesional : "")}" />
+
+      <label for="citaInst">Institución <span>(opcional)</span></label>
+      <input id="citaInst" type="text" maxlength="150" placeholder="Clínica del Country"
+             value="${esc(editando ? cita.institucion : "")}" />
+
+      <label for="citaDir">Dirección <span>(opcional)</span></label>
+      <input id="citaDir" type="text" maxlength="200" placeholder="Carrera 16 #82-57, consultorio 304"
+             value="${esc(editando ? cita.direccion : "")}" />
+
+      <label for="citaNotas">Notas <span>(opcional)</span></label>
+      <input id="citaNotas" type="text" maxlength="400" placeholder="Llevar los exámenes"
+             value="${esc(editando ? cita.notas : "")}" />
+
+      ${
+        editando
+          ? `<label>Estado</label>
+      <div class="tipo-picker" id="citaEstados">
+        ${Object.entries(ESTADOS_CITA)
+          .map(
+            ([clave, e]) => `<button type="button" data-estado="${clave}" class="${
+              clave === estadoElegido ? "activo" : ""
+            }"><span>${e.etiqueta}</span></button>`
+          )
+          .join("")}
+      </div>`
+          : ""
+      }
+
+      <p class="modal-error" id="citaError" hidden></p>
+
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="citaCancelar">Cancelar</button>
+        <button class="btn btn-primary" id="citaGuardar">Guardar</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const errorEl = overlay.querySelector("#citaError");
+  const btnGuardar = overlay.querySelector("#citaGuardar");
+  const val = (id) => overlay.querySelector(id).value.trim();
+  const mostrarError = (texto) => {
+    errorEl.textContent = texto;
+    errorEl.hidden = !texto;
+  };
+
+  const cerrar = () => {
+    document.removeEventListener("keydown", alPresionarTecla);
+    overlay.remove();
+  };
+  function alPresionarTecla(e) {
+    if (e.key === "Escape") cerrar();
+  }
+  document.addEventListener("keydown", alPresionarTecla);
+  overlay.onclick = (e) => {
+    if (e.target === overlay) cerrar();
+  };
+
+  overlay.querySelectorAll("#citaEstados button").forEach((b) => {
+    b.onclick = () => {
+      estadoElegido = b.dataset.estado;
+      overlay
+        .querySelectorAll("#citaEstados button")
+        .forEach((x) => x.classList.toggle("activo", x === b));
+    };
+  });
+
+  btnGuardar.onclick = async () => {
+    const especialidad = val("#citaEsp");
+    const f = val("#citaFecha");
+    const h = val("#citaHora");
+    if (!especialidad) return mostrarError("Escribe la especialidad.");
+    if (!f || !h) return mostrarError("La fecha y la hora son obligatorias.");
+
+    const cuerpo = {
+      especialidad,
+      fechaHora: `${f}T${h}`,
+      profesional: val("#citaProf"),
+      institucion: val("#citaInst"),
+      direccion: val("#citaDir"),
+      notas: val("#citaNotas"),
+    };
+    if (editando) cuerpo.estado = estadoElegido;
+
+    btnGuardar.disabled = true;
+    try {
+      await api(editando ? `/citas/${cita.id}` : "/citas", {
+        method: editando ? "PUT" : "POST",
+        body: JSON.stringify(cuerpo),
+      });
+      cerrar();
+      refreshAll();
+    } catch (err) {
+      mostrarError(err.message);
+      btnGuardar.disabled = false;
+    }
+  };
+  overlay.querySelector("#citaCancelar").onclick = cerrar;
+  overlay.querySelector("#citaEsp").focus();
+}
+
 function renderInicio() {
   const s = state.senior;
   if (!s) { screenEl.innerHTML = '<div class="loading">Cargando…</div>'; return; }
@@ -236,6 +426,14 @@ function renderInicio() {
       </div>
       ${renderListaRecordatorios()}
     </div>
+
+    <div class="section">
+      <div class="section-head">
+        <p class="section-title">Citas médicas</p>
+        <button class="add-btn" id="btnAgregarCita">${ICONS.mas} Agregar</button>
+      </div>
+      ${renderListaCitas()}
+    </div>
   `;
 
   // El mapa real se coloca DESPUES de escribir el HTML, porque necesita
@@ -256,10 +454,11 @@ function renderInicio() {
   };
   document.getElementById("btnLlamar").onclick = () => {
     const principal = contactoPrincipal();
-    window.location.href = telHref(principal?.telefonoPrincipal);
+    window.location.href = telDeContacto(principal);
   };
 
   conectarEventosRecordatorios();
+  conectarEventosCitas();
 }
 
 // El mapa estilizado de siempre: cuatro calles inventadas y el punto
@@ -590,9 +789,9 @@ function renderPerfil() {
       <div class="contact-row">
         <div class="left">
           <div class="contact-avatar">${ICONS.persona}</div>
-          <div><p class="title">${esc(c.nombre)}</p><p class="sub">${esc(c.relacion)}</p></div>
+          <div><p class="title">${esc(c.nombre)}</p><p class="sub">${esc(vinculoDeContacto(c))}</p></div>
         </div>
-        <a href="${telHref(c.telefonoPrincipal)}" style="color:var(--noche);display:flex">${ICONS.phone}</a>
+        <a href="${telDeContacto(c)}" style="color:var(--noche);display:flex">${ICONS.phone}</a>
       </div>`
     )
     .join("");
@@ -602,7 +801,7 @@ function renderPerfil() {
       <div class="avatar-lg">${esc(s.nombre.charAt(0))}</div>
       <div>
         <h1>${esc(s.nombre)}</h1>
-        <p>${s.edad} años · Pulsera de caucho #${esc(s.pulseraId)}</p>
+        <p>${s.edad != null ? s.edad + " años · " : ""}Pulsera de caucho #${esc(s.codigoQr)}</p>
       </div>
     </div>
 
@@ -742,9 +941,20 @@ function abrirFormMedicamento(med) {
       <input id="medFrecuencia" type="text" maxlength="100" placeholder="Una vez al día"
              value="${esc(med ? med.frecuencia : "")}" />
 
-      <label for="medHorario">Horario <span>(opcional)</span></label>
-      <input id="medHorario" type="text" maxlength="100" placeholder="8:00 am"
-             value="${esc(med ? med.horario : "")}" />
+      <label>Horas de toma <span>(opcional)</span></label>
+      <div class="horas-toma" id="medHoras"></div>
+      <button type="button" class="add-btn horas-agregar" id="medHoraMas">${ICONS.mas} Otra hora</button>
+
+      <div class="fila-2">
+        <div>
+          <label for="medInicio">Inicio <span>(opcional)</span></label>
+          <input id="medInicio" type="date" value="${esc(med && med.fechaInicio ? med.fechaInicio : "")}" />
+        </div>
+        <div>
+          <label for="medFin">Fin <span>(opcional)</span></label>
+          <input id="medFin" type="date" value="${esc(med && med.fechaFin ? med.fechaFin : "")}" />
+        </div>
+      </div>
 
       <label for="medVia">Vía de administración <span>(opcional)</span></label>
       <input id="medVia" type="text" maxlength="100" placeholder="Oral"
@@ -780,6 +990,22 @@ function abrirFormMedicamento(med) {
     if (e.target === overlay) cerrar();
   };
 
+  // Una fila por hora de toma, como medicamento_horas en el backend real.
+  // Con horas concretas se pueden programar avisos; con "despues del
+  // almuerzo" no.
+  const horasEl = overlay.querySelector("#medHoras");
+  const agregarHora = (valor) => {
+    const fila = document.createElement("div");
+    fila.className = "hora-fila";
+    fila.innerHTML = `<input type="time" value="${esc(valor || "")}" />
+      <button type="button" aria-label="Quitar hora">${ICONS.basura}</button>`;
+    fila.querySelector("button").onclick = () => fila.remove();
+    horasEl.appendChild(fila);
+  };
+  const horasIniciales = med && med.horas && med.horas.length ? med.horas : [""];
+  horasIniciales.forEach(agregarHora);
+  overlay.querySelector("#medHoraMas").onclick = () => agregarHora("");
+
   const guardar = async () => {
     const nombre = val("#medNombre");
     if (!nombre) {
@@ -794,7 +1020,9 @@ function abrirFormMedicamento(med) {
       nombre,
       dosis: val("#medDosis"),
       frecuencia: val("#medFrecuencia"),
-      horario: val("#medHorario"),
+      horas: [...horasEl.querySelectorAll("input")].map((i) => i.value).filter(Boolean),
+      fechaInicio: val("#medInicio"),
+      fechaFin: val("#medFin"),
       viaAdministracion: val("#medVia"),
       notas: val("#medNotas"),
     };

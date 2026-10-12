@@ -46,7 +46,7 @@ function mostrarLogin(mensaje = "") {
           <span class="cred">claudia / claudia123</span>
         </button>
         <button class="login-demo-fila" data-usuario="kevin" data-clave="kevin123">
-          <span class="rol">Contacto de emergencia</span>
+          <span class="rol">Familiar</span>
           <span class="cred">kevin / kevin123</span>
         </button>
       </div>

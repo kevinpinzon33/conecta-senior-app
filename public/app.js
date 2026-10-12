@@ -12,19 +12,22 @@ const TABS_POR_ROL = {
     { id: "misalertas", etiqueta: "Alertas", icono: "campana", badge: true },
     { id: "miinfo", etiqueta: "Mi info", icono: "persona" },
   ],
-  contacto_emergencia: [
+};
+// Familiar y cuidador (los roles del backend real) ven la misma interfaz.
+const TABS_CUIDADOR = [
     { id: "inicio", etiqueta: "Inicio", icono: "pin" },
     { id: "alertas", etiqueta: "Alertas", icono: "campana", badge: true },
     { id: "perfil", etiqueta: "Perfil", icono: "persona" },
-  ],
-};
+  ];
+TABS_POR_ROL.familiar = TABS_CUIDADOR;
+TABS_POR_ROL.cuidador = TABS_CUIDADOR;
 
 const VISTAS = {
   // Adulto mayor
   hoy: renderMayorHoy,
   misalertas: renderMayorAlertas,
   miinfo: renderMayorInfo,
-  // Contacto de emergencia
+  // Familiar o cuidador
   inicio: renderInicio,
   alertas: renderAlertas,
   perfil: renderPerfil,
@@ -88,19 +91,21 @@ function render() {
 async function refreshAll() {
   if (!state.usuario) return;
 
-  const [senior, alertas, contactos, recordatorios, medicamentos] =
+  const [senior, alertas, contactos, recordatorios, medicamentos, citas] =
     await Promise.all([
       api("/senior"),
       api("/alertas"),
       api("/contactos"),
       api("/recordatorios"),
       api("/medicamentos"),
+      api("/citas"),
     ]);
   state.senior = senior;
   state.alertas = alertas;
   state.contactos = contactos;
   state.recordatorios = recordatorios;
   state.medicamentos = medicamentos;
+  state.citas = citas;
   render();
   avisarAlertasNuevas();
 }
