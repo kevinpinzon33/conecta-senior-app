@@ -1,0 +1,14 @@
+{
+  "appId": "co.conectasenior.app",
+  "appName": "Conecta Senior",
+  "webDir": "www",
+  "server": {
+    "url": "https://conecta-senior-app.onrender.com",
+    "cleartext": false,
+    "errorPath": "sin-conexion.html"
+  },
+  "android": {
+    "useLegacyBridge": true,
+    "backgroundColor": "#181B21"
+  }
+}

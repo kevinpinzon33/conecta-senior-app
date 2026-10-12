@@ -896,6 +896,8 @@ function estiloPosicion(s) {
 // app se agrega a la pantalla de inicio, y conviene decirlo: si no, el
 // cuidador busca un boton que no existe.
 function barraNotificaciones() {
+  // En la app Android el permiso se pide al entrar (ver app.js).
+  if (esAppNativa) return "";
   if (!notificacionesDisponibles()) {
     return `
     <div class="simulate-bar">

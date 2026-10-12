@@ -199,7 +199,11 @@ function renderCompartirUbicacion() {
       ${pie}
       ${
         activo
-          ? `<p class="compartir-aviso">Mantén esta pantalla abierta: al bloquear el teléfono se deja de enviar.</p>`
+          ? `<p class="compartir-aviso">${
+            esAppNativa
+              ? "Puedes bloquear el teléfono: sigue enviando mientras veas la notificación de Conecta Senior."
+              : "Mantén esta pantalla abierta: al bloquear el teléfono se deja de enviar."
+          }</p>`
           : ""
       }
     </div>`;

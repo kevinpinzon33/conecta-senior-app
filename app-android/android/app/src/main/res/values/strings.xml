@@ -1,0 +1,16 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Conecta Senior</string>
+    <string name="title_activity_main">Conecta Senior</string>
+    <string name="package_name">co.conectasenior.app</string>
+    <string name="custom_url_scheme">co.conectasenior.app</string>
+
+    <!-- Notificacion fija mientras se comparte la ubicacion en segundo
+         plano (plugin @capacitor-community/background-geolocation). Android
+         la exige, y es tambien lo que deja claro a la persona que esta
+         compartiendo: Google lo revisa. El titulo y el texto los pone la
+         app al arrancar (compartir-ubicacion.js). -->
+    <string name="capacitor_background_geolocation_notification_channel_name">Ubicación compartida con tu familia</string>
+    <string name="capacitor_background_geolocation_notification_icon">drawable/ic_notificacion</string>
+    <string name="capacitor_background_geolocation_notification_color">#C9A535</string>
+</resources>

@@ -244,6 +244,20 @@ async function pedirPermisoNotificaciones() {
 }
 
 async function notificarAlSistema(alerta) {
+  // En la app Android no hay service worker: se usa la notificacion
+  // nativa (plugin LocalNotifications).
+  if (esAppNativa) {
+    try {
+      await AvisosNativos.schedule({
+        notifications: [{
+          id: Math.floor(Date.now() % 2147483647),
+          title: alerta.titulo,
+          body: alerta.detalle,
+        }],
+      });
+    } catch (_) {}
+    return;
+  }
   if (!notificacionesDisponibles() || Notification.permission !== "granted") return;
   try {
     const reg = await navigator.serviceWorker.ready;
@@ -284,6 +298,11 @@ async function iniciarSesionEnLaApp() {
     };
     if (esAdultoMayor()) reanudarSiProcede();
   }
+
+  // En la app Android el permiso de notificaciones se pide al entrar: es
+  // lo que permite avisar de una alerta (y, al adulto mayor, mostrar la
+  // notificacion fija de "compartiendo ubicacion").
+  if (esAppNativa) AvisosNativos.requestPermissions().catch(() => {});
 
   await refreshAll();
 
@@ -336,8 +355,15 @@ async function arrancar() {
   }
 }
 
-// Registrar service worker para que funcione como PWA instalable
-if ("serviceWorker" in navigator) {
+// Registrar service worker para que funcione como PWA instalable.
+//
+// NO dentro de la app Android: Capacitor inyecta su puente con lo nativo
+// en el HTML que carga, y si el service worker sirviera la pagina desde
+// su cache, la app se quedaria sin ubicacion en segundo plano sin avisar.
+const dentroDeLaApp = !!(
+  window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()
+);
+if ("serviceWorker" in navigator && !dentroDeLaApp) {
   // Si ya habia un service worker controlando la pantalla y entra uno
   // nuevo, es que se desplego una version nueva: recargamos una sola vez
   // para mostrarla al instante, en vez de dejar al usuario viendo los

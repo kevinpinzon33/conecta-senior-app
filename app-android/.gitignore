@@ -1,0 +1,13 @@
+node_modules/
+android/app/build/
+android/build/
+android/.gradle/
+android/local.properties
+android/.idea/
+android/capacitor-cordova-android-plugins/build/
+*.apk
+*.aab
+# La llave de firma NUNCA se sube (ver CONTEXTO-APP-ANDROID.md)
+*.jks
+*.keystore
+keystore.properties

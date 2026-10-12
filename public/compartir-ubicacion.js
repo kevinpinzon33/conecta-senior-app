@@ -47,6 +47,19 @@ const Ubicacion = {
   alCambiar: null, // callback para repintar la pantalla
 };
 
+// ── App Android (Capacitor) ──────────────────────────────────────
+// Dentro de la app de la Play Store esta misma pagina tiene acceso a la
+// ubicacion NATIVA en segundo plano (plugin background-geolocation): el
+// telefono sigue enviando con la pantalla bloqueada, con una notificacion
+// fija que Android exige. En el navegador nada de esto existe y se usa la
+// geolocalizacion web de siempre. Ver CONTEXTO-APP-ANDROID.md.
+const esAppNativa = !!(
+  window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()
+);
+const GeoNativa = esAppNativa ? window.Capacitor.registerPlugin("BackgroundGeolocation") : null;
+const AvisosNativos = esAppNativa ? window.Capacitor.registerPlugin("LocalNotifications") : null;
+const HttpNativo = esAppNativa ? window.Capacitor.registerPlugin("CapacitorHttp") : null;
+
 const esIOS =
   /iPad|iPhone|iPod/.test(navigator.userAgent) ||
   (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
@@ -98,7 +111,7 @@ async function enviarPosicion(pos) {
   };
 
   try {
-    const r = await api("/ubicacion", {
+    const r = esAppNativa ? await postNativo("/ubicacion", lectura) : await api("/ubicacion", {
       method: "POST",
       body: JSON.stringify(lectura),
     });
@@ -220,6 +233,7 @@ function arrancarWatch() {
  * setTimeout por delante. Si no, iOS deniega el permiso sin preguntar.
  */
 function iniciarCompartir() {
+  if (esAppNativa) return iniciarCompartirNativo();
   if (!navigator.geolocation) {
     fijarEstado("error", "Este teléfono no permite compartir la ubicación.");
     return;
@@ -243,6 +257,10 @@ function iniciarCompartir() {
 // Devuelve la promesa del aviso al servidor, para que cerrar sesion
 // pueda esperarla antes de invalidar el token.
 function detenerCompartir() {
+  if (Ubicacion.watchNativo) {
+    GeoNativa.removeWatcher({ id: Ubicacion.watchNativo }).catch(() => {});
+    Ubicacion.watchNativo = null;
+  }
   Ubicacion.activo = false;
   localStorage.removeItem(CLAVE_COMPARTIR);
   if (Ubicacion.watchId !== null) {
@@ -264,6 +282,9 @@ function detenerCompartir() {
 // pantalla encendida.
 function alCambiarVisibilidad() {
   if (document.visibilityState !== "visible" || !Ubicacion.activo) return;
+  // En la app nativa el servicio sigue solo en segundo plano: no hay
+  // nada que reiniciar.
+  if (esAppNativa) return;
   arrancarWatch();
   pedirWakeLock();
 }
@@ -288,9 +309,89 @@ async function reanudarSiProcede() {
     // permiso ya estaba dado no aparece ningún diálogo.
   }
 
+  if (esAppNativa) return iniciarCompartirNativo();
+
   Ubicacion.activo = true;
   fijarEstado("buscando", "");
   arrancarWatch();
   arrancarLatido();
   pedirWakeLock();
+}
+
+// ── Ruta nativa (app Android) ────────────────────────────────────
+
+/**
+ * Android limita las peticiones HTTP que salen del WebView tras 5 minutos
+ * en segundo plano (issue #14 del plugin). Por eso, en la app, las
+ * lecturas salen por el HTTP nativo de Capacitor, que no tiene ese freno.
+ * Devuelve el cuerpo JSON como api().
+ */
+async function postNativo(ruta, cuerpo) {
+  const r = await HttpNativo.post({
+    url: location.origin + "/api" + ruta,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: "Bearer " + state.token,
+    },
+    data: cuerpo,
+  });
+  if (r.status === 401) {
+    olvidarSesion();
+    mostrarLogin("Tu sesión expiró. Vuelve a entrar.");
+    throw new Error("Sesión expirada");
+  }
+  if (r.status >= 400) throw new Error((r.data && r.data.error) || "Error " + r.status);
+  return r.data;
+}
+
+async function iniciarCompartirNativo() {
+  Ubicacion.activo = true;
+  Ubicacion.ultimoEnvio = 0;
+  primeraAceptada = true;
+  localStorage.setItem(CLAVE_COMPARTIR, "1");
+  fijarEstado("buscando", "");
+
+  // Android 13+ no muestra la notificacion fija sin este permiso, y sin
+  // notificacion el sistema corta el servicio de ubicacion.
+  try {
+    await AvisosNativos.requestPermissions();
+  } catch (_) {}
+
+  try {
+    if (Ubicacion.watchNativo) await GeoNativa.removeWatcher({ id: Ubicacion.watchNativo });
+    Ubicacion.watchNativo = await GeoNativa.addWatcher(
+      {
+        backgroundTitle: "Compartiendo tu ubicación",
+        backgroundMessage: "Tu familia puede ver dónde estás. Abre Conecta Senior para dejar de compartir.",
+        requestPermissions: true,
+        stale: false,
+        // 0 = una lectura por segundo aunque no se mueva. Hace de latido:
+        // asi el servidor sabe que el telefono sigue vivo. enviarPosicion
+        // solo manda una cada 10 s.
+        distanceFilter: 0,
+      },
+      (loc, error) => {
+        if (error) {
+          if (error.code === "NOT_AUTHORIZED") {
+            fijarEstado(
+              "error",
+              "Conecta Senior no tiene permiso de ubicación. Ábrelo en Ajustes → Aplicaciones → Conecta Senior → Permisos → Ubicación y elige “Permitir todo el tiempo” o “Solo mientras se usa la app”."
+            );
+            if (window.confirm("Conecta Senior necesita tu ubicación. ¿Abrir los ajustes ahora?")) {
+              GeoNativa.openSettings();
+            }
+          } else {
+            fijarEstado("error", "No se pudo obtener la señal del GPS.");
+          }
+          return;
+        }
+        alRecibirPosicion({
+          coords: { latitude: loc.latitude, longitude: loc.longitude, accuracy: loc.accuracy },
+          timestamp: loc.time,
+        });
+      }
+    );
+  } catch (err) {
+    fijarEstado("error", "No se pudo iniciar la ubicación: " + err.message);
+  }
 }
