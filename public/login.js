@@ -49,9 +49,9 @@ function mostrarLogin(mensaje = "") {
           <span class="rol">Familiar</span>
           <span class="cred">kevin / kevin123</span>
         </button>
-        <button class="login-demo-fila" data-usuario="jorge" data-clave="jorge123">
+        <button class="login-demo-fila" data-usuario="fernando" data-clave="fernando123">
           <span class="rol">Adulto mayor (2.º)</span>
-          <span class="cred">jorge / jorge123</span>
+          <span class="cred">fernando / fernando123</span>
         </button>
       </div>
     </div>

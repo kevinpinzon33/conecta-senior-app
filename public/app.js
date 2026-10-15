@@ -93,7 +93,7 @@ async function refreshAll() {
 
   // El familiar primero averigua a quienes tiene a cargo y cual esta
   // seleccionado; todo lo demas se pide para ese (cabecera X-Adulto-Id).
-  // Las alertas, en cambio, se piden de TODOS: una alerta de Jorge no
+  // Las alertas, en cambio, se piden de TODOS: una alerta de Fernando no
   // puede pasar desapercibida porque en pantalla se esta mirando a Claudia.
   if (esContacto()) {
     state.adultos = await api("/adultos");
@@ -260,7 +260,7 @@ async function pedirPermisoNotificaciones() {
 async function notificarAlSistema(alerta) {
   // En la app Android no hay service worker: se usa la notificacion
   // nativa (plugin LocalNotifications).
-  if (esAppNativa) {
+  if (esAppNativa && AvisosNativos) {
     try {
       await AvisosNativos.schedule({
         notifications: [{
@@ -316,7 +316,11 @@ async function iniciarSesionEnLaApp() {
   // En la app Android el permiso de notificaciones se pide al entrar: es
   // lo que permite avisar de una alerta (y, al adulto mayor, mostrar la
   // notificacion fija de "compartiendo ubicacion").
-  if (esAppNativa) AvisosNativos.requestPermissions().catch(() => {});
+  if (esAppNativa && AvisosNativos) {
+    Promise.resolve()
+      .then(() => AvisosNativos.requestPermissions())
+      .catch(() => {});
+  }
 
   await refreshAll();
 

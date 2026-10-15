@@ -53,12 +53,33 @@ const Ubicacion = {
 // telefono sigue enviando con la pantalla bloqueada, con una notificacion
 // fija que Android exige. En el navegador nada de esto existe y se usa la
 // geolocalizacion web de siempre. Ver CONTEXTO-APP-ANDROID.md.
-const esAppNativa = !!(
-  window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()
-);
-const GeoNativa = esAppNativa ? window.Capacitor.registerPlugin("BackgroundGeolocation") : null;
-const AvisosNativos = esAppNativa ? window.Capacitor.registerPlugin("LocalNotifications") : null;
-const HttpNativo = esAppNativa ? window.Capacitor.registerPlugin("CapacitorHttp") : null;
+//
+// OJO (fallo de la primera version del APK, 2026-10-14): la app carga la
+// pagina desde el servidor, asi que NO tiene el paquete @capacitor/core;
+// solo el puente que inyecta Capacitor, y ese puente NO trae
+// registerPlugin(). Llamarlo reventaba este archivo al cargar, y despues
+// del login la app se quedaba en "Cargando…" para siempre. Los plugins
+// estan en window.Capacitor.Plugins.
+function pluginNativo(nombre) {
+  const cap = window.Capacitor;
+  if (!cap) return null;
+  if (cap.Plugins && cap.Plugins[nombre]) return cap.Plugins[nombre];
+  if (typeof cap.registerPlugin === "function") return cap.registerPlugin(nombre);
+  return null;
+}
+
+let esAppNativa = false;
+try {
+  esAppNativa = !!(
+    window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()
+  );
+} catch (_) {}
+const GeoNativa = esAppNativa ? pluginNativo("BackgroundGeolocation") : null;
+const AvisosNativos = esAppNativa ? pluginNativo("LocalNotifications") : null;
+const HttpNativo = esAppNativa ? pluginNativo("CapacitorHttp") : null;
+// Si faltara la pieza de ubicacion (un APK viejo, por ejemplo), se sigue
+// con la geolocalizacion web: peor que la nativa, pero funciona.
+if (esAppNativa && (!GeoNativa || !HttpNativo)) esAppNativa = false;
 
 const esIOS =
   /iPad|iPhone|iPod/.test(navigator.userAgent) ||
@@ -258,7 +279,10 @@ function iniciarCompartir() {
 // pueda esperarla antes de invalidar el token.
 function detenerCompartir() {
   if (Ubicacion.watchNativo) {
-    GeoNativa.removeWatcher({ id: Ubicacion.watchNativo }).catch(() => {});
+    const id = Ubicacion.watchNativo;
+    Promise.resolve()
+      .then(() => GeoNativa.removeWatcher({ id }))
+      .catch(() => {});
     Ubicacion.watchNativo = null;
   }
   Ubicacion.activo = false;
@@ -354,7 +378,7 @@ async function iniciarCompartirNativo() {
   // Android 13+ no muestra la notificacion fija sin este permiso, y sin
   // notificacion el sistema corta el servicio de ubicacion.
   try {
-    await AvisosNativos.requestPermissions();
+    if (AvisosNativos) await AvisosNativos.requestPermissions();
   } catch (_) {}
 
   try {

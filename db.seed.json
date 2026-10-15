@@ -32,10 +32,10 @@
     },
     {
       "id": 3,
-      "usuario": "jorge",
-      "clave": "jorge123",
-      "nombre": "Jorge Castillo",
-      "correo": "jorge.castillo@ejemplo.com",
+      "usuario": "fernando",
+      "clave": "fernando123",
+      "nombre": "Fernando Pinzón",
+      "correo": "fernando.pinzon@ejemplo.com",
       "celular": "3109876543",
       "indicadorCelular": "+57",
       "rol": "adulto_mayor",
@@ -58,7 +58,7 @@
     },
     {
       "id": 3,
-      "nombreCompleto": "Jorge Castillo",
+      "nombreCompleto": "Fernando Pinzón",
       "fechaNacimiento": "1944-07-22",
       "ciudad": "Bogotá",
       "barrio": "Cedritos",
@@ -85,7 +85,7 @@
       "usuarioId": 2,
       "tipoRelacion": "familiar",
       "esPrincipal": false,
-      "parentesco": "Sobrino"
+      "parentesco": "Hijo"
     }
   ],
   "informacionMedica": [
@@ -151,7 +151,7 @@
       "adultoMayorId": 3,
       "nombre": "Kevin Pinzón",
       "relacion": "familiar",
-      "parentesco": "Sobrino",
+      "parentesco": "Hijo",
       "telefonoPrincipal": "3203883602",
       "indicadorTelPrincipal": "+57",
       "telefonoSecundario": null,
