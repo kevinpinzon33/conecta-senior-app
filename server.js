@@ -304,14 +304,19 @@ const ROLES_CUIDADOR = ["familiar", "cuidador"];
  * Hoy la interfaz muestra uno solo; con varios habra que elegir.
  */
 function adultoIdDeUsuario(db, usuario) {
-  if (!usuario) return null;
+  return adultosDeUsuario(db, usuario)[0] || null;
+}
+
+/** Todos los adultos que ve el usuario: primero aquel del que es responsable principal. */
+function adultosDeUsuario(db, usuario) {
+  if (!usuario) return [];
   if (usuario.rol === "adulto_mayor") {
-    return db.adultoMayor.some((a) => a.id === usuario.id) ? usuario.id : null;
+    return db.adultoMayor.some((a) => a.id === usuario.id) ? [usuario.id] : [];
   }
-  const vinculos = db.adultoResponsable
-    .filter((r) => r.usuarioId === usuario.id)
-    .sort((a, b) => Number(!!b.esPrincipal) - Number(!!a.esPrincipal));
-  return vinculos[0] ? vinculos[0].adultoMayorId : null;
+  return db.adultoResponsable
+    .filter((r) => r.usuarioId === usuario.id && db.adultoMayor.some((a) => a.id === r.adultoMayorId))
+    .sort((a, b) => Number(!!b.esPrincipal) - Number(!!a.esPrincipal))
+    .map((r) => r.adultoMayorId);
 }
 
 // --- Sesiones ---
@@ -370,6 +375,18 @@ function requiereAuth(req, res, next) {
   }
   req.usuario = usuario;
   req.adultoId = adultoIdDeUsuario(db, usuario);
+
+  // Un familiar con varios adultos a cargo elige con cual trabaja con la
+  // cabecera X-Adulto-Id (el frontend la manda sola, ver comun.js). Solo
+  // se acepta si de verdad esta vinculado en adultoResponsable: si no,
+  // podria leer los datos de cualquier persona cambiando un numero.
+  const pedido = Number(req.headers["x-adulto-id"]);
+  if (pedido && ROLES_CUIDADOR.includes(usuario.rol)) {
+    if (!adultosDeUsuario(db, usuario).includes(pedido)) {
+      return res.status(403).json({ error: "No tienes acceso a esta persona" });
+    }
+    req.adultoId = pedido;
+  }
   next();
 }
 
@@ -480,6 +497,28 @@ app.get("/api/senior", requiereAuth, requiereAdulto, (req, res) => {
   res.json(vista);
 });
 
+// Todos los adultos que el familiar tiene a cargo, con su estado, para el
+// selector y para pintarlos juntos en el mapa. El principal va primero.
+app.get("/api/adultos", requiereAuth, (req, res) => {
+  const db = loadDb();
+  const ids = adultosDeUsuario(db, req.usuario);
+  ids.forEach((id) => revisarSenal(db, id));
+  const lista = ids.map((id) => {
+    const v = vistaSenior(db, id);
+    const vinculo = db.adultoResponsable.find(
+      (r) => r.adultoMayorId === id && r.usuarioId === req.usuario.id
+    );
+    return {
+      ...v,
+      esPrincipal: !!(vinculo && vinculo.esPrincipal),
+      parentesco: vinculo ? vinculo.parentesco || "" : "",
+      alertasPendientes: deAdulto(db.alertas, id).filter((a) => a.estado === "pendiente").length,
+    };
+  });
+  saveDb(db);
+  res.json(lista);
+});
+
 // Ordenados por prioridad (1 = al primero que se avisa), como en el
 // backend real.
 app.get("/api/contactos", requiereAuth, requiereAdulto, (req, res) => {
@@ -490,10 +529,18 @@ app.get("/api/contactos", requiereAuth, requiereAdulto, (req, res) => {
   res.json(lista);
 });
 
+// Con ?todos=1, las de todos los adultos a cargo, cada una con el nombre
+// de su adulto: un familiar con dos personas a cargo no puede enterarse
+// de una alerta solo si tiene seleccionada a la persona correcta.
 app.get("/api/alertas", requiereAuth, requiereAdulto, (req, res) => {
   const db = loadDb();
-  if (revisarSenal(db, req.adultoId)) saveDb(db);
-  const ordenadas = deAdulto(db.alertas, req.adultoId).sort(
+  const ids = req.query.todos ? adultosDeUsuario(db, req.usuario) : [req.adultoId];
+  if (ids.map((id) => revisarSenal(db, id)).some(Boolean)) saveDb(db);
+  const nombres = Object.fromEntries(db.adultoMayor.map((a) => [a.id, a.nombreCompleto]));
+  const ordenadas = db.alertas
+    .filter((a) => ids.includes(a.adultoMayorId))
+    .map((a) => ({ ...a, adultoNombre: nombres[a.adultoMayorId] || "" }))
+    .sort(
     (a, b) => new Date(b.creadoEn) - new Date(a.creadoEn)
   );
   res.json(ordenadas);
@@ -584,6 +631,12 @@ app.post(
 // como siempre. En el modo "cuidador", cada nuevo centro NO reinicia
 // nada: es la misma zona moviendose.
 
+// El familiar escribe el radio con su unidad (m o km). Por debajo de 50 m
+// el ruido del GPS (10-50 m en ciudad) haria saltar alertas falsas; 20 km
+// ya cubre una ciudad entera.
+const RADIO_MIN_M = 50;
+const RADIO_MAX_M = 20000;
+
 function esCoordenada(lat, lng) {
   return (
     typeof lat === "number" && typeof lng === "number" &&
@@ -609,8 +662,8 @@ app.post(
     const db = loadDb();
     const { zona, mon } = vigilancia(db, req.adultoId);
 
-    if (radioM != null && (typeof radioM !== "number" || radioM < 50 || radioM > 5000)) {
-      return res.status(400).json({ error: "El radio debe estar entre 50 y 5000 m" });
+    if (radioM != null && (typeof radioM !== "number" || radioM < RADIO_MIN_M || radioM > RADIO_MAX_M)) {
+      return res.status(400).json({ error: "El radio debe estar entre 50 m y 20 km" });
     }
     if (modo != null && !["fija", "cuidador"].includes(modo)) {
       return res.status(400).json({ error: "Modo de zona no válido" });
@@ -1667,10 +1720,10 @@ app.post("/api/zona-segura", (req, res) => {
   if (typeof lat === "number") zona.lat = lat;
   if (typeof lng === "number") zona.lng = lng;
   if (typeof radioM === "number") {
-    if (radioM < 50 || radioM > 5000) {
+    if (radioM < RADIO_MIN_M || radioM > RADIO_MAX_M) {
       return res
         .status(400)
-        .json({ error: "El radio debe estar entre 50 y 5000 m" });
+        .json({ error: "El radio debe estar entre 50 m y 20 km" });
     }
     zona.radioM = radioM;
   }

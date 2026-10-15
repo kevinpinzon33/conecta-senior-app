@@ -1,7 +1,12 @@
 {
   "_comentario": "Datos de ejemplo INVENTADOS, salvo el telefono de Kevin Pinzon, que es real y lo pidio el usuario para las pruebas. Cada coleccion es una tabla del backend real (conecta-senior, esquema _esquema_completo.sql del ZIP _5-10) con sus columnas en camelCase: adultoMayor = adulto_mayor, adultoResponsable = adulto_responsable, contactosEmergencia = contactos_emergencia, etc. Las colecciones marcadas en _propias NO existen en el backend real: son la propuesta de tablas nuevas para ubicacion, zona segura, alertas y recordatorios. Las claves van en texto plano solo porque son usuarios de prueba.",
-  "_propias": ["recordatorios", "alertas", "zonasSeguras", "monitoreo", "sesiones"],
-
+  "_propias": [
+    "recordatorios",
+    "alertas",
+    "zonasSeguras",
+    "monitoreo",
+    "sesiones"
+  ],
   "usuarios": [
     {
       "id": 1,
@@ -24,9 +29,19 @@
       "indicadorCelular": "+57",
       "rol": "familiar",
       "estado": "activo"
+    },
+    {
+      "id": 3,
+      "usuario": "jorge",
+      "clave": "jorge123",
+      "nombre": "Jorge Castillo",
+      "correo": "jorge.castillo@ejemplo.com",
+      "celular": "3109876543",
+      "indicadorCelular": "+57",
+      "rol": "adulto_mayor",
+      "estado": "activo"
     }
   ],
-
   "adultoMayor": [
     {
       "id": 1,
@@ -40,9 +55,21 @@
       "fotoUrl": null,
       "plan": "esencial",
       "codigoQr": "CS-00412"
+    },
+    {
+      "id": 3,
+      "nombreCompleto": "Jorge Castillo",
+      "fechaNacimiento": "1944-07-22",
+      "ciudad": "Bogotá",
+      "barrio": "Cedritos",
+      "direccion": "Calle 145 #13-20",
+      "movilidad": "Usa bastón",
+      "estadoCognitivo": "Sin alteraciones",
+      "fotoUrl": null,
+      "plan": "esencial",
+      "codigoQr": "CS-00413"
     }
   ],
-
   "adultoResponsable": [
     {
       "id": 1,
@@ -51,9 +78,16 @@
       "tipoRelacion": "familiar",
       "esPrincipal": true,
       "parentesco": "Hijo"
+    },
+    {
+      "id": 2,
+      "adultoMayorId": 3,
+      "usuarioId": 2,
+      "tipoRelacion": "familiar",
+      "esPrincipal": false,
+      "parentesco": "Sobrino"
     }
   ],
-
   "informacionMedica": [
     {
       "id": 1,
@@ -62,9 +96,16 @@
       "condiciones": "Hipertensión, diabetes tipo 2",
       "alergias": "Penicilina",
       "notas": ""
+    },
+    {
+      "id": 2,
+      "adultoMayorId": 3,
+      "tipoSangre": "A+",
+      "condiciones": "Artrosis de rodilla",
+      "alergias": "Ninguna conocida",
+      "notas": ""
     }
   ],
-
   "contactosEmergencia": [
     {
       "id": 1,
@@ -104,9 +145,21 @@
       "indicadorTelSecundario": null,
       "correo": null,
       "prioridad": 3
+    },
+    {
+      "id": 4,
+      "adultoMayorId": 3,
+      "nombre": "Kevin Pinzón",
+      "relacion": "familiar",
+      "parentesco": "Sobrino",
+      "telefonoPrincipal": "3203883602",
+      "indicadorTelPrincipal": "+57",
+      "telefonoSecundario": null,
+      "indicadorTelSecundario": null,
+      "correo": null,
+      "prioridad": 1
     }
   ],
-
   "medicamentos": [
     {
       "id": 1,
@@ -135,15 +188,49 @@
       "notas": "",
       "activo": true,
       "fechaCreacion": "2026-08-03T12:00:00.000Z"
+    },
+    {
+      "id": 3,
+      "adultoMayorId": 3,
+      "nombre": "Acetaminofén",
+      "dosis": "500 mg",
+      "frecuencia": "Cada 8 horas si hay dolor",
+      "horario": "8:00 a. m. y 4:00 p. m.",
+      "viaAdministracion": "Oral",
+      "fechaInicio": "2026-09-01",
+      "fechaFin": null,
+      "notas": "",
+      "activo": true,
+      "fechaCreacion": "2026-09-01T12:00:00.000Z"
     }
   ],
-
   "medicamentoHoras": [
-    { "id": 1, "medicamentoId": 1, "hora": "08:00" },
-    { "id": 2, "medicamentoId": 2, "hora": "07:00" },
-    { "id": 3, "medicamentoId": 2, "hora": "19:00" }
+    {
+      "id": 1,
+      "medicamentoId": 1,
+      "hora": "08:00"
+    },
+    {
+      "id": 2,
+      "medicamentoId": 2,
+      "hora": "07:00"
+    },
+    {
+      "id": 3,
+      "medicamentoId": 2,
+      "hora": "19:00"
+    },
+    {
+      "id": 4,
+      "medicamentoId": 3,
+      "hora": "08:00"
+    },
+    {
+      "id": 5,
+      "medicamentoId": 3,
+      "hora": "16:00"
+    }
   ],
-
   "citasMedicas": [
     {
       "id": 1,
@@ -160,7 +247,6 @@
       "creadoEn": "2026-10-01T12:00:00.000Z"
     }
   ],
-
   "recordatorios": [
     {
       "id": 1,
@@ -183,9 +269,19 @@
       "hora": "16:00",
       "hecho": false,
       "creadoEn": "2026-08-04T12:00:00.000Z"
+    },
+    {
+      "id": 3,
+      "adultoMayorId": 3,
+      "tipo": "otro",
+      "titulo": "Ejercicios de rodilla",
+      "detalle": "10 minutos",
+      "fecha": "",
+      "hora": "10:00",
+      "hecho": false,
+      "creadoEn": "2026-09-01T12:00:00.000Z"
     }
   ],
-
   "alertas": [
     {
       "id": 1,
@@ -210,7 +306,6 @@
       "whatsappEnviado": true
     }
   ],
-
   "zonasSeguras": [
     {
       "id": 1,
@@ -218,9 +313,15 @@
       "lat": 4.75793,
       "lng": -74.03965,
       "radioM": 300
+    },
+    {
+      "id": 2,
+      "adultoMayorId": 3,
+      "lat": 4.72905,
+      "lng": -74.04612,
+      "radioM": 200
     }
   ],
-
   "monitoreo": [
     {
       "adultoMayorId": 1,
@@ -238,8 +339,24 @@
         "lecturasDentro": 0,
         "ultimaLectura": null
       }
+    },
+    {
+      "adultoMayorId": 3,
+      "status": "presente",
+      "revisadoEn": null,
+      "ubicacion": {
+        "direccion": "Cedritos, Bogotá",
+        "lat": 4.72905,
+        "lng": -74.04612,
+        "actualizadoEn": "2026-08-03T15:12:00.000Z"
+      },
+      "seguimiento": {
+        "estaFuera": false,
+        "lecturasFuera": 0,
+        "lecturasDentro": 0,
+        "ultimaLectura": null
+      }
     }
   ],
-
   "sesiones": []
 }

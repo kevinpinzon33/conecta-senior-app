@@ -91,10 +91,21 @@ function render() {
 async function refreshAll() {
   if (!state.usuario) return;
 
+  // El familiar primero averigua a quienes tiene a cargo y cual esta
+  // seleccionado; todo lo demas se pide para ese (cabecera X-Adulto-Id).
+  // Las alertas, en cambio, se piden de TODOS: una alerta de Jorge no
+  // puede pasar desapercibida porque en pantalla se esta mirando a Claudia.
+  if (esContacto()) {
+    state.adultos = await api("/adultos");
+    if (!state.adultos.some((a) => a.id === state.adultoId)) {
+      state.adultoId = state.adultos[0] ? state.adultos[0].id : null;
+    }
+  }
+
   const [senior, alertas, contactos, recordatorios, medicamentos, citas] =
     await Promise.all([
       api("/senior"),
-      api("/alertas"),
+      api(esContacto() ? "/alertas?todos=1" : "/alertas"),
       api("/contactos"),
       api("/recordatorios"),
       api("/medicamentos"),
@@ -168,6 +179,9 @@ function mostrarAvisoAlerta(alerta, cuantas) {
   aviso.innerHTML = `
     <div class="aviso-icono">${ICONS.warn}</div>
     <div class="aviso-cuerpo">
+      ${state.adultos.length > 1 && alerta.adultoNombre
+        ? `<p class="aviso-quien">${esc(alerta.adultoNombre)}</p>`
+        : ""}
       <p class="aviso-titulo">${esc(alerta.titulo)}</p>
       <p class="aviso-detalle">${esc(alerta.detalle)}</p>
       <p class="aviso-hora">${esc(fmtCuando(alerta.creadoEn))}${

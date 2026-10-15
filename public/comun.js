@@ -52,6 +52,16 @@ const ESTADOS_CITA = {
 };
 
 const CLAVE_TOKEN = "conecta_senior_token";
+// El adulto mayor que el familiar tiene seleccionado (si tiene varios).
+const CLAVE_ADULTO = "conecta_senior_adulto";
+
+function leerAdultoGuardado() {
+  try {
+    return Number(localStorage.getItem(CLAVE_ADULTO)) || null;
+  } catch (_) {
+    return null;
+  }
+}
 
 let state = {
   usuario: null, // { id, usuario, nombre, rol, adultoMayorId }
@@ -62,13 +72,20 @@ let state = {
   recordatorios: [],
   medicamentos: [],
   citas: [],
+  adultos: [], // todos los que tiene a cargo el familiar (GET /api/adultos)
+  adultoId: leerAdultoGuardado(), // el seleccionado
   tab: null,
 };
 
 // --- Cliente de la API ---------------------------------------------------
 
 async function api(path, opts = {}) {
-  const headers = { "Content-Type": "application/json", ...(opts.headers || {}) };
+  // Con varios adultos a cargo, el servidor necesita saber de cual se
+  // habla. Va antes de opts.headers para que una llamada concreta (por
+  // ejemplo, atender la alerta de otro adulto) pueda cambiarlo.
+  const porDefecto = { "Content-Type": "application/json" };
+  if (state.adultoId && esContacto()) porDefecto["X-Adulto-Id"] = String(state.adultoId);
+  const headers = { ...porDefecto, ...(opts.headers || {}) };
   if (state.token) headers.Authorization = `Bearer ${state.token}`;
 
   const res = await fetch("/api" + path, { ...opts, headers });
@@ -109,6 +126,9 @@ function olvidarSesion() {
   state.recordatorios = [];
   state.medicamentos = [];
   state.citas = [];
+  state.adultos = [];
+  state.adultoId = null;
+  try { localStorage.removeItem(CLAVE_ADULTO); } catch (_) {}
   state.tab = null;
   localStorage.removeItem(CLAVE_TOKEN);
 }

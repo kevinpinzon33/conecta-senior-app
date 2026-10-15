@@ -59,6 +59,8 @@ const Mapa = {
   circuloPrecision: null,
   circuloZona: null,
   ultimoCentrado: null, // para no re-centrar en cada repintado
+  otros: {}, // adultoId -> marcador de los demas adultos a cargo (solo OSM)
+  encuadrado: false, // si ya se encuadraron todos los adultos una vez
 };
 
 const COLOR = {
@@ -305,7 +307,72 @@ function seMovio(s) {
  * @param {object} s           el adulto mayor
  * @returns {boolean} false si no se pudo y hay que usar el mapa estilizado
  */
-async function montarMapaReal(hueco, s) {
+// ── Varios adultos a cargo (solo OpenStreetMap) ──────────────────
+// La persona seleccionada es el marcador grande con su zona; los demas,
+// un punto mas pequeño con su nombre. Tocar uno lo selecciona. Su zona
+// segura no se dibuja para no llenar el mapa de circulos: se ve al
+// seleccionarlo.
+
+function etiquetaAdulto(nombre) {
+  return primerNombre(nombre);
+}
+
+function actualizarOtrosOSM(s, otros) {
+  const vigentes = new Set(otros.map((a) => a.id));
+  for (const id of Object.keys(Mapa.otros)) {
+    if (!vigentes.has(Number(id))) {
+      Mapa.otros[id].remove();
+      delete Mapa.otros[id];
+    }
+  }
+  for (const a of otros) {
+    if (typeof a.ubicacion.lat !== "number") continue;
+    const fuera = a.seguimiento && a.seguimiento.estaFuera;
+    const estilo = {
+      radius: 7,
+      color: "#181B21",
+      weight: 2,
+      fillColor: COLOR[fuera ? "alerta" : a.status] || COLOR.presente,
+      fillOpacity: 1,
+    };
+    let m = Mapa.otros[a.id];
+    if (!m) {
+      m = L.circleMarker([a.ubicacion.lat, a.ubicacion.lng], estilo)
+        .bindTooltip(etiquetaAdulto(a.nombre), { permanent: true, direction: "top", className: "etiqueta-mapa otro" })
+        .addTo(Mapa.mapa);
+      m.on("click", () => {
+        if (typeof elegirAdulto === "function") elegirAdulto(a.id);
+      });
+      Mapa.otros[a.id] = m;
+    } else {
+      m.setLatLng([a.ubicacion.lat, a.ubicacion.lng]);
+      m.setStyle(estilo);
+    }
+  }
+
+  // El seleccionado tambien lleva su nombre cuando hay mas de uno.
+  if (otros.length) {
+    if (!Mapa.marcador.getTooltip()) {
+      Mapa.marcador.bindTooltip("", { permanent: true, direction: "top", className: "etiqueta-mapa" });
+    }
+    Mapa.marcador.setTooltipContent(etiquetaAdulto(s.nombre));
+  } else if (Mapa.marcador.getTooltip()) {
+    Mapa.marcador.unbindTooltip();
+  }
+
+  // La primera vez, que se vea a todos.
+  if (otros.length && !Mapa.encuadrado) {
+    const puntos = [[s.ubicacion.lat, s.ubicacion.lng]].concat(
+      otros.filter((a) => typeof a.ubicacion.lat === "number").map((a) => [a.ubicacion.lat, a.ubicacion.lng])
+    );
+    Mapa.mapa.fitBounds(puntos, { padding: [40, 40], maxZoom: 16 });
+    Mapa.encuadrado = true;
+    return true;
+  }
+  return false;
+}
+
+async function montarMapaReal(hueco, s, otros = []) {
   if (!hayMapaReal() || !hueco) return false;
 
   try {
@@ -336,6 +403,9 @@ async function montarMapaReal(hueco, s) {
     actualizarMapaGoogle(s);
     google.maps.event.trigger(Mapa.mapa, "resize");
   } else {
+    // Si se acaba de encuadrar a todos, no re-centrar en el seleccionado.
+    const encuadro = actualizarOtrosOSM(s, otros);
+    if (encuadro) Mapa.ultimoCentrado = s.ubicacion.lat.toFixed(5) + "," + s.ubicacion.lng.toFixed(5);
     actualizarMapaOSM(s);
     // Tras moverlo de sitio, Leaflet necesita recalcular su tamaño o
     // dibuja el mapa recortado y con las teselas a medias.

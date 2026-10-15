@@ -28,30 +28,45 @@ const ZonaMovil = {
 const MS_ENVIO_ZONA = 10000;
 const OPCIONES_ZONA = { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 };
 
-// ¿La zona de la persona a mi cargo me esta siguiendo a MI?
+// ¿La zona de la persona seleccionada me esta siguiendo a MI?
 function zonaMeSigue() {
   const z = state.senior && state.senior.zonaSegura;
   return !!z && z.modo === "cuidador" && z.cuidadorId === state.usuario?.id;
+}
+
+// Con varios adultos a cargo, puede haber mas de una zona siguiendome
+// (salir con los dos a la vez). Se mira en la lista de todos, no solo en
+// el seleccionado: cambiar de pestaña no puede dejar una zona quieta.
+function adultosQueMeSiguen() {
+  const yo = state.usuario?.id;
+  const lista = state.adultos && state.adultos.length ? state.adultos : state.senior ? [state.senior] : [];
+  return lista
+    .filter((a) => a.zonaSegura && a.zonaSegura.modo === "cuidador" && a.zonaSegura.cuidadorId === yo)
+    .map((a) => a.id);
 }
 
 async function enviarCentroZona(pos) {
   const ahora = Date.now();
   if (ZonaMovil.ultimoEnvio && ahora - ZonaMovil.ultimoEnvio < MS_ENVIO_ZONA - 1000) return;
   ZonaMovil.ultimoEnvio = ahora;
-  try {
-    await api("/senior/zona-segura/centro", {
-      method: "POST",
-      body: JSON.stringify({
-        lat: pos.coords.latitude,
-        lng: pos.coords.longitude,
-        precision: pos.coords.accuracy,
-      }),
-    });
-    ZonaMovil.error = "";
-  } catch (err) {
-    // 409: alguien cambio la zona a otro modo. Se deja de enviar.
-    if (/no está siguiendo/.test(err.message)) detenerZonaMovil();
-    else ZonaMovil.error = "Sin conexión; reintentando…";
+  const cuerpo = JSON.stringify({
+    lat: pos.coords.latitude,
+    lng: pos.coords.longitude,
+    precision: pos.coords.accuracy,
+  });
+  for (const id of adultosQueMeSiguen()) {
+    try {
+      await api("/senior/zona-segura/centro", {
+        method: "POST",
+        headers: { "X-Adulto-Id": String(id) },
+        body: cuerpo,
+      });
+      ZonaMovil.error = "";
+    } catch (err) {
+      // 409: alguien cambio esa zona a otro modo; el siguiente refresco
+      // la saca de la lista. Cualquier otro fallo, se reintenta.
+      if (!/no está siguiendo/.test(err.message)) ZonaMovil.error = "Sin conexión; reintentando…";
+    }
   }
 }
 
@@ -123,7 +138,7 @@ function detenerZonaMovil() {
  * solo: la pantalla muestra un boton para hacerlo con un toque.
  */
 async function sincronizarZonaMovil() {
-  if (!zonaMeSigue()) {
+  if (!adultosQueMeSiguen().length) {
     if (ZonaMovil.activo) detenerZonaMovil();
     ZonaMovil.necesitaToque = false;
     return;

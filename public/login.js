@@ -49,6 +49,10 @@ function mostrarLogin(mensaje = "") {
           <span class="rol">Familiar</span>
           <span class="cred">kevin / kevin123</span>
         </button>
+        <button class="login-demo-fila" data-usuario="jorge" data-clave="jorge123">
+          <span class="rol">Adulto mayor (2.º)</span>
+          <span class="cred">jorge / jorge123</span>
+        </button>
       </div>
     </div>
   `;

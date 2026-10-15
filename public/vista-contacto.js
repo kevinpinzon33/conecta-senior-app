@@ -366,6 +366,7 @@ function renderInicio() {
   if (!s) { screenEl.innerHTML = '<div class="loading">Cargando…</div>'; return; }
 
   screenEl.innerHTML = `
+    ${selectorAdultos()}
     <div class="hero">
       <p class="hero-greeting">Hola, ${esc(primerNombre(state.usuario.nombre))}</p>
       <h1 class="hero-title">${esc(primerNombre(s.nombre))} está ${s.status === "alerta" ? "en alerta" : "bien"}</h1>
@@ -399,7 +400,7 @@ function renderInicio() {
         ${infoZona(s)}
         <div class="map-meta">
           <button class="ajustar-zona" id="btnZona">
-            Zona segura: ${s.zonaSegura.radioM} m · <b>Ajustar</b>
+            Zona segura: ${fmtRadio(s.zonaSegura.radioM)} · <b>Ajustar</b>
           </button>
           ${
             enVivo(s)
@@ -440,7 +441,9 @@ function renderInicio() {
   // pantalla nunca se queda con un recuadro vacio.
   const hueco = document.getElementById("mapaHueco");
   if (hayMapaReal() && hueco) {
-    montarMapaReal(hueco, s).then((ok) => {
+    // Con varios adultos a cargo, los demas tambien salen en el mapa.
+    const otros = state.adultos.filter((a) => a.id !== s.id);
+    montarMapaReal(hueco, s, otros).then((ok) => {
       if (!ok && hueco.childElementCount === 0) hueco.innerHTML = mapaEstilizado(s);
     });
   }
@@ -466,6 +469,7 @@ function renderInicio() {
 
   conectarEventosRecordatorios();
   conectarEventosCitas();
+  conectarSelectorAdultos();
 }
 
 // El mapa estilizado de siempre: cuatro calles inventadas y el punto
@@ -563,7 +567,7 @@ function infoZona(s) {
   if (ZonaMovil.activo && ZonaMovil.ultimaPos) {
     return `<p class="info-zona">${ICONS.persona}<span>La zona te sigue: avisa si ${esc(
       primerNombre(s.nombre)
-    )} se aleja más de ${z.radioM} m de ti. Mantén la app abierta. <span class="mono">±${Math.round(
+    )} se aleja más de ${fmtRadio(z.radioM)} de ti. Mantén la app abierta. <span class="mono">±${Math.round(
       ZonaMovil.ultimaPos.coords.accuracy
     )} m</span></span></p>`;
   }
@@ -589,17 +593,34 @@ function infoZona(s) {
 // Se quito "Donde está Claudia": como ella camina, la zona quedaba donde
 // estaba en ese instante, que no significaba nada.
 
+// El radio se escribe con su unidad (pedido del usuario el 2026-10-14).
+// Los tamaños de siempre quedan como atajos de un toque. Limites: 50 m
+// (por debajo, el ruido del GPS daria alertas falsas) y 20 km; los mismos
+// que valida el servidor.
 const RADIOS_ZONA = [100, 200, 300, 500, 1000];
+const RADIO_MIN_M = 50;
+const RADIO_MAX_M = 20000;
+
+// El numero que va en el campo, en la unidad elegida y con coma decimal.
+function numeroRadio(m, unidad) {
+  const n = unidad === "km" ? m / 1000 : m;
+  return String(Math.round(n * 1000) / 1000).replace(".", ",");
+}
+
+function fmtRadio(m) {
+  if (m >= 1000) return (m / 1000).toLocaleString("es-CO", { maximumFractionDigits: 2 }) + " km";
+  return m + " m";
+}
 
 function abrirFormZona() {
   const s = state.senior;
   const z = s.zonaSegura;
   const nombre = primerNombre(s.nombre);
-  const radios = RADIOS_ZONA.includes(z.radioM)
-    ? RADIOS_ZONA
-    : [...RADIOS_ZONA, z.radioM].sort((a, b) => a - b);
 
   let radioElegido = z.radioM;
+  // La unidad con la que se muestra al abrir: km si es un numero redondo
+  // de kilometros o mas de 1 km.
+  let unidad = z.radioM >= 1000 ? "km" : "m";
   let modo = z.modo === "cuidador" ? "cuidador" : "fija";
   // El punto elegido para la zona fija. Arranca en el centro actual.
   let punto = { lat: z.lat, lng: z.lng };
@@ -614,15 +635,19 @@ function abrirFormZona() {
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="zonaTitle">
       <h2 id="zonaTitle">Zona segura</h2>
 
-      <label>Radio</label>
-      <div class="tipo-picker radios-zona" id="zonaRadios">
-        ${radios
-          .map(
-            (r) => `<button type="button" data-radio="${r}" class="${
-              r === radioElegido ? "activo" : ""
-            }"><span>${r >= 1000 ? r / 1000 + " km" : r + " m"}</span></button>`
-          )
-          .join("")}
+      <label for="zonaRadio">Radio</label>
+      <div class="radio-libre">
+        <!-- type="text" y no "number": un campo numerico descarta "1,5"
+             (la coma decimal de Colombia) y lo deja vacio sin avisar. -->
+        <input id="zonaRadio" type="text" inputmode="decimal" autocomplete="off"
+               value="${numeroRadio(radioElegido, unidad)}" />
+        <div class="unidad" id="zonaUnidad" role="group" aria-label="Unidad">
+          <button type="button" data-unidad="m" class="${unidad === "m" ? "activo" : ""}">m</button>
+          <button type="button" data-unidad="km" class="${unidad === "km" ? "activo" : ""}">km</button>
+        </div>
+      </div>
+      <div class="atajos-radio" id="zonaRadios">
+        ${RADIOS_ZONA.map((r) => `<button type="button" data-radio="${r}">${fmtRadio(r)}</button>`).join("")}
       </div>
 
       <label>Centro</label>
@@ -671,6 +696,7 @@ function abrirFormZona() {
   const cerrar = () => {
     document.removeEventListener("keydown", alPresionarTecla);
     if (miniMapa) miniMapa.remove();
+    miniMapa = null;
     overlay.remove();
   };
   function alPresionarTecla(e) {
@@ -681,15 +707,58 @@ function abrirFormZona() {
     if (e.target === overlay) cerrar();
   };
 
-  overlay.querySelectorAll("#zonaRadios button").forEach((btn) => {
+  // ── Radio: numero + unidad ──
+  const inputRadio = $("#zonaRadio");
+
+  // Lee lo escrito y lo pasa a metros. null si no es un numero valido.
+  function leerRadio() {
+    const n = parseFloat(String(inputRadio.value).replace(",", "."));
+    if (!Number.isFinite(n) || n <= 0) return null;
+    return Math.round(unidad === "km" ? n * 1000 : n);
+  }
+
+  function alCambiarRadio() {
+    const m = leerRadio();
+    overlay
+      .querySelectorAll("#zonaRadios button")
+      .forEach((b) => b.classList.toggle("activo", Number(b.dataset.radio) === m));
+    if (m && m >= RADIO_MIN_M && m <= RADIO_MAX_M) {
+      radioElegido = m;
+      if (miniMapa) {
+        miniMapa.circulo.setRadius(m);
+        // Que se vea la zona entera: con 1,5 km el circulo se sale del
+        // recuadro y no se sabe que abarca.
+        miniMapa.fitBounds(miniMapa.circulo.getBounds(), { padding: [12, 12], maxZoom: 17, animate: false });
+      }
+    }
+  }
+  inputRadio.oninput = alCambiarRadio;
+
+  overlay.querySelectorAll("#zonaUnidad button").forEach((btn) => {
     btn.onclick = () => {
-      radioElegido = Number(btn.dataset.radio);
+      // Cambiar la unidad conserva la distancia: 500 m pasa a 0,5 km.
+      const m = leerRadio();
+      unidad = btn.dataset.unidad;
       overlay
-        .querySelectorAll("#zonaRadios button")
+        .querySelectorAll("#zonaUnidad button")
         .forEach((b) => b.classList.toggle("activo", b === btn));
-      if (miniMapa) miniMapa.circulo.setRadius(radioElegido);
+      if (m) inputRadio.value = numeroRadio(m, unidad);
+      alCambiarRadio();
     };
   });
+
+  overlay.querySelectorAll("#zonaRadios button").forEach((btn) => {
+    btn.onclick = () => {
+      const m = Number(btn.dataset.radio);
+      unidad = m >= 1000 ? "km" : "m";
+      overlay
+        .querySelectorAll("#zonaUnidad button")
+        .forEach((b) => b.classList.toggle("activo", b.dataset.unidad === unidad));
+      inputRadio.value = numeroRadio(m, unidad);
+      alCambiarRadio();
+    };
+  });
+  alCambiarRadio();
 
   // ── Mini mapa con el punto arrastrable (zona fija) ──
   function moverPunto(lat, lng, centrar) {
@@ -697,7 +766,7 @@ function abrirFormZona() {
     if (!miniMapa) return;
     pin.setLatLng([lat, lng]);
     miniMapa.circulo.setLatLng([lat, lng]);
-    if (centrar) miniMapa.setView([lat, lng], 17);
+    if (centrar) miniMapa.setView([lat, lng], 17, { animate: false });
   }
 
   async function prepararMiniMapa() {
@@ -728,7 +797,10 @@ function abrirFormZona() {
       moverPunto(p.lat, p.lng, false);
     });
     miniMapa.on("click", (e) => moverPunto(e.latlng.lat, e.latlng.lng, false));
-    setTimeout(() => miniMapa.invalidateSize(), 50);
+    // Si el formulario se cerro antes de los 50 ms, el mapa ya no existe.
+    setTimeout(() => {
+      if (miniMapa) miniMapa.invalidateSize();
+    }, 50);
   }
 
   async function buscar() {
@@ -820,6 +892,11 @@ function abrirFormZona() {
   elegirModo(modo);
 
   btnGuardar.onclick = async () => {
+    const m = leerRadio();
+    if (!m || m < RADIO_MIN_M || m > RADIO_MAX_M) {
+      return mostrarError("El radio debe estar entre 50 m y 20 km.");
+    }
+    radioElegido = m;
     let cuerpo;
     if (modo === "cuidador") {
       if (!miPosicion) {
@@ -920,6 +997,47 @@ function barraNotificaciones() {
   return "";
 }
 
+// ── Varios adultos a cargo ────────────────────────────────────────
+// Un familiar puede tener a mas de una persona a cargo (adultoResponsable).
+// Todos salen en el mapa y sus alertas llegan juntas; el selector decide
+// de quien son los recordatorios, citas, perfil y zona que se ven.
+
+const variosAdultos = () => state.adultos.length > 1;
+
+function selectorAdultos() {
+  if (!variosAdultos()) return "";
+  return `
+    <div class="selector-adultos" role="tablist" aria-label="Personas a tu cargo">
+      ${state.adultos
+        .map((a) => {
+          const fuera = a.seguimiento && a.seguimiento.estaFuera;
+          const estado = a.status === "alerta" || fuera ? "alerta" : "presente";
+          return `<button role="tab" data-adulto="${a.id}" aria-selected="${a.id === state.adultoId}"
+                  class="${a.id === state.adultoId ? "activo" : ""}">
+            <span class="punto-estado ${estado}"></span>
+            ${esc(primerNombre(a.nombre))}
+            ${a.alertasPendientes ? `<span class="cuenta-alertas">${a.alertasPendientes}</span>` : ""}
+          </button>`;
+        })
+        .join("")}
+    </div>`;
+}
+
+function elegirAdulto(id) {
+  if (id === state.adultoId) return;
+  state.adultoId = id;
+  try { localStorage.setItem(CLAVE_ADULTO, String(id)); } catch (_) {}
+  // Que el mapa vaya a la persona recien elegida.
+  if (typeof Mapa !== "undefined") Mapa.ultimoCentrado = null;
+  refreshAll();
+}
+
+function conectarSelectorAdultos() {
+  screenEl.querySelectorAll(".selector-adultos [data-adulto]").forEach((b) => {
+    b.onclick = () => elegirAdulto(Number(b.dataset.adulto));
+  });
+}
+
 function renderAlertas() {
   const items = state.alertas
     .map((a) => {
@@ -932,10 +1050,11 @@ function renderAlertas() {
             <p class="title">${esc(a.titulo)}</p>
             <span class="time">${fmtDateTime(a.creadoEn)}</span>
           </div>
+          ${variosAdultos() ? `<p class="alert-quien">${esc(a.adultoNombre)}</p>` : ""}
           <p class="alert-detail">${esc(a.detalle)}</p>
           <div class="alert-place">${ICONS.pin} ${esc(a.lugar)}</div>
           <span class="alert-status ${a.estado}">${esc(a.estado)}</span>
-          ${a.estado === "pendiente" ? `<div class="alert-actions"><button data-id="${a.id}">Marcar como atendida</button></div>` : ""}
+          ${a.estado === "pendiente" ? `<div class="alert-actions"><button data-id="${a.id}" data-adulto="${a.adultoMayorId}">Marcar como atendida</button></div>` : ""}
         </div>
       </div>`;
     })
@@ -950,7 +1069,9 @@ function renderAlertas() {
     ${barraNotificaciones()}
 
     <div class="simulate-bar">
-      <p>Para probar el flujo sin la pulsera física: simula que alguien escaneó el código QR.</p>
+      <p>Para probar el flujo sin la pulsera física: simula que alguien escaneó el código QR${
+        variosAdultos() ? ` de ${esc(primerNombre(state.senior.nombre))}` : ""
+      }.</p>
       <button id="btnSimular">Simular escaneo</button>
     </div>
 
@@ -974,7 +1095,11 @@ function renderAlertas() {
 
   screenEl.querySelectorAll(".alert-actions button").forEach((btn) => {
     btn.onclick = async () => {
-      await api(`/alertas/${btn.dataset.id}/marcar-atendida`, { method: "POST" });
+      // La alerta puede ser de otro adulto distinto al seleccionado.
+      await api(`/alertas/${btn.dataset.id}/marcar-atendida`, {
+        method: "POST",
+        headers: { "X-Adulto-Id": btn.dataset.adulto },
+      });
       refreshAll();
     };
   });
@@ -998,6 +1123,7 @@ function renderPerfil() {
     .join("");
 
   screenEl.innerHTML = `
+    ${selectorAdultos()}
     <div class="profile-head">
       <div class="avatar-lg">${esc(s.nombre.charAt(0))}</div>
       <div>
@@ -1040,6 +1166,7 @@ function renderPerfil() {
   `;
 
   conectarEventosMedicamentos();
+  conectarSelectorAdultos();
 }
 
 // ── Medicamentos ──────────────────────────────────────────────────

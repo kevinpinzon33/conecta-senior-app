@@ -956,3 +956,60 @@ div.info-zona .btn { width: 100%; margin-top: 4px; }
 .mini-mapa .leaflet-tile-pane {
   filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.9) saturate(0.75);
 }
+
+/* --- Radio de la zona: numero + unidad, con atajos --- */
+.radio-libre { display: flex; gap: 8px; margin-bottom: 8px; }
+.radio-libre input { flex: 1; min-width: 0; margin-bottom: 0; font-size: 17px; }
+.unidad {
+  display: flex; flex-shrink: 0; border: 1px solid var(--linea);
+  border-radius: 12px; overflow: hidden; background: var(--panel-alt);
+}
+.unidad button {
+  border: 0; background: transparent; color: var(--texto-muted); cursor: pointer;
+  font-family: var(--font-body); font-size: 14px; font-weight: 600; padding: 0 16px;
+}
+.unidad button.activo { background: rgba(201,165,53,0.15); color: var(--noche); }
+.atajos-radio { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+.atajos-radio button {
+  background: transparent; border: 1px solid var(--linea); border-radius: 999px;
+  padding: 6px 12px; cursor: pointer;
+  font-family: var(--font-body); font-size: 12.5px; font-weight: 600; color: var(--texto-muted);
+}
+.atajos-radio button.activo { border-color: var(--noche); color: var(--noche); background: rgba(201,165,53,0.1); }
+
+/* --- Varios adultos a cargo --- */
+.selector-adultos {
+  display: flex; gap: 8px; overflow-x: auto; padding: 14px 20px 0;
+  scrollbar-width: none;
+}
+.selector-adultos::-webkit-scrollbar { display: none; }
+.selector-adultos button {
+  flex-shrink: 0; display: inline-flex; align-items: center; gap: 7px;
+  background: var(--panel); border: 1px solid var(--linea); border-radius: 999px;
+  padding: 8px 14px; cursor: pointer;
+  font-family: var(--font-body); font-size: 14px; font-weight: 600; color: var(--texto-muted);
+}
+.selector-adultos button.activo { border-color: var(--noche); color: var(--texto); background: rgba(201,165,53,0.12); }
+.punto-estado { width: 8px; height: 8px; border-radius: 50%; background: var(--presente); }
+.punto-estado.alerta { background: var(--senal); }
+.cuenta-alertas {
+  min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px;
+  background: var(--senal); color: white; font-size: 11px; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.alert-quien {
+  margin: 2px 0 0; font-size: 12px; font-weight: 700; color: var(--noche);
+  text-transform: uppercase; letter-spacing: 0.03em;
+}
+.aviso-quien {
+  margin: 0 0 2px; font-size: 11.5px; font-weight: 700; color: var(--noche);
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.leaflet-tooltip.etiqueta-mapa {
+  background: var(--panel); color: var(--texto); border: 1px solid var(--noche);
+  border-radius: 8px; padding: 2px 7px; box-shadow: none;
+  font-family: var(--font-body); font-size: 12px; font-weight: 700;
+}
+.leaflet-tooltip.etiqueta-mapa.otro { border-color: var(--linea); color: var(--texto-muted); cursor: pointer; }
+.leaflet-tooltip-top.etiqueta-mapa::before { border-top-color: var(--noche); }
+.leaflet-tooltip-top.etiqueta-mapa.otro::before { border-top-color: var(--linea); }
