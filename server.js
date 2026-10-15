@@ -1236,6 +1236,10 @@ const GEOCERCA = {
   precisionMaximaM: 100,
   // Un salto mas rapido que esto es dato basura, no una persona caminando.
   velocidadMaximaKmh: 200,
+  // Si tantas lecturas "imposibles" SEGUIDAS coinciden entre si (a menos
+  // de metrosCandidato), la mala era la anterior y se aceptan.
+  lecturasParaCorregir: 3,
+  metrosCandidato: 100,
 };
 
 function distanciaMetros(lat1, lng1, lat2, lng2) {
@@ -1293,13 +1297,31 @@ function evaluarUbicacion(db, adultoId, { lat, lng, precision }) {
       );
       const kmh = (salto / segundos) * 3.6;
       if (kmh > GEOCERCA.velocidadMaximaKmh) {
-        return {
-          aceptada: false,
-          motivo: `Salto de ${Math.round(kmh)} km/h; se descarta por imposible`,
-        };
+        // ¿Y si la lectura mala fue la ANTERIOR? Paso en el emulador el
+        // 2026-10-14: el primer dato fue de California, se acepto, y
+        // despues todas las de Bogota se rechazaban por "salto imposible"
+        // (y lo habrian seguido haciendo durante horas). Si varias lecturas
+        // seguidas rechazadas coinciden entre si, la verdad son ellas.
+        const c = seg.candidato;
+        if (c && distanciaMetros(c.lat, c.lng, lat, lng) <= GEOCERCA.metrosCandidato) {
+          c.n += 1;
+        } else {
+          seg.candidato = { lat, lng, n: 1 };
+        }
+        if (seg.candidato.n < GEOCERCA.lecturasParaCorregir) {
+          return {
+            aceptada: false,
+            motivo: `Salto de ${Math.round(kmh)} km/h; se descarta por imposible`,
+          };
+        }
+        // Se acepta como posicion nueva. El conteo de la geocerca empieza
+        // de cero: lo acumulado se midio desde una posicion falsa.
+        seg.lecturasFuera = 0;
+        seg.lecturasDentro = 0;
       }
     }
   }
+  seg.candidato = null;
 
   const distancia = distanciaMetros(zona.lat, zona.lng, lat, lng);
   const umbralSalida = zona.radioM + GEOCERCA.margenM;

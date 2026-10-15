@@ -381,6 +381,32 @@ async function iniciarCompartirNativo() {
     if (AvisosNativos) await AvisosNativos.requestPermissions();
   } catch (_) {}
 
+  // PRIMERO el permiso, y solo despues el watcher. Si se deja que
+  // addWatcher lo pida, el plugin arranca el servicio en primer plano
+  // ANTES de que la persona acepte: Android lo rechaza (SecurityException,
+  // "requires permissions ... FOREGROUND_SERVICE_LOCATION") y el plugin no
+  // lo reintenta. Resultado: sin notificacion fija y, al bloquear el
+  // telefono, la ubicacion se apagaba. Visto en el emulador el 2026-10-14.
+  try {
+    let permiso = await GeoNativa.checkPermissions();
+    if (permiso.location !== "granted") permiso = await GeoNativa.requestPermissions();
+    if (permiso.location !== "granted") {
+      Ubicacion.activo = false;
+      localStorage.removeItem(CLAVE_COMPARTIR);
+      fijarEstado(
+        "error",
+        "Conecta Senior no tiene permiso de ubicación. Ábrelo en Ajustes → Aplicaciones → Conecta Senior → Permisos → Ubicación y elige “Permitir solo mientras se usa la app”."
+      );
+      if (window.confirm("Conecta Senior necesita tu ubicación. ¿Abrir los ajustes ahora?")) {
+        GeoNativa.openSettings();
+      }
+      return;
+    }
+  } catch (_) {
+    // Si el plugin no tuviera estos metodos, se sigue: addWatcher pide
+    // el permiso por su cuenta (con el defecto de arriba, pero funciona).
+  }
+
   try {
     if (Ubicacion.watchNativo) await GeoNativa.removeWatcher({ id: Ubicacion.watchNativo });
     Ubicacion.watchNativo = await GeoNativa.addWatcher(
