@@ -117,12 +117,17 @@ async function iniciarMiUbicacionNativa() {
       return;
     }
     MiUbicacion.watchNativo = await GeoNativa.addWatcher(
-      { requestPermissions: false, stale: false, distanceFilter: 10 },
+      // stale: true entrega de inmediato la ultima posicion conocida del
+      // telefono, para verse en el mapa al instante en vez de esperar una
+      // lectura nueva. Se descarta si tiene mas de 2 minutos: una posicion
+      // vieja daria distancias falsas.
+      { requestPermissions: false, stale: true, distanceFilter: 10 },
       (loc, err) => {
         if (err) {
           if (!MiUbicacion.pos) MiUbicacion.error = "gps";
           return;
         }
+        if (loc.time && Date.now() - loc.time > MI_UBICACION_VIGENTE_MS) return;
         registrarMiPosicion(loc.latitude, loc.longitude, loc.accuracy);
       }
     );

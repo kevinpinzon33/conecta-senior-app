@@ -1,14 +1,61 @@
 <!doctype html>
 <html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Sin conexión</title>
+<!--
+  Pagina que muestra Capacitor si no puede cargar la app desde el servidor
+  (sin internet, o Render despertando: tarda 30-50 s). Va DENTRO del APK,
+  asi que cambiarla exige compilar uno nuevo.
+
+  Reintenta SOLA cada 5 s (2026-10-18): antes solo tenia un boton, y en el
+  emulador la app se quedo en esta pagina indefinidamente. Una persona
+  mayor no tiene por que saber que hay que tocar "Reintentar".
+-->
 <style>
   body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#181B21;color:#F0EAD6;font-family:-apple-system,"Segoe UI",sans-serif;text-align:center;padding:24px;box-sizing:border-box}
   h1{font-family:Georgia,serif;font-weight:500;color:#C9A535;margin:0 0 12px}
-  p{color:#9A9080;line-height:1.5;margin:0 0 24px}
-  button{background:#C9A535;color:#181B21;border:0;border-radius:14px;padding:14px 24px;font-size:16px;font-weight:600}
+  p{color:#9A9080;line-height:1.5;margin:0 0 16px}
+  #estado{color:#F0EAD6;font-weight:600;min-height:1.5em}
+  button{background:#C9A535;color:#181B21;border:0;border-radius:14px;padding:14px 24px;font-size:16px;font-weight:600;margin-top:8px}
 </style></head>
 <body><div>
   <h1>Sin conexión</h1>
-  <p>No pudimos conectar con Conecta Senior.<br>Revisa tu internet e inténtalo de nuevo.<br>Si acabas de abrirla, el servidor puede tardar hasta un minuto en despertar.</p>
-  <button onclick="location.href='https://conecta-senior-app.onrender.com'">Reintentar</button>
-</div></body></html>
+  <p>No pudimos conectar con Conecta Senior.<br>Revisa tu internet. Si acabas de abrirla, el servidor puede tardar hasta un minuto en despertar.</p>
+  <p id="estado"></p>
+  <button id="reintentar">Reintentar ahora</button>
+</div>
+<script>
+  var SERVIDOR = "https://conecta-senior-app.onrender.com";
+  var SEGUNDOS = 5;
+  var quedan = SEGUNDOS;
+  var probando = false;
+  var estado = document.getElementById("estado");
+
+  // Se pregunta por un archivo pequeño antes de navegar: si se navegara a
+  // ciegas y el servidor siguiera sin responder, Capacitor volveria a esta
+  // pagina y la cuenta empezaria de cero sin que nada cambiara.
+  function probar() {
+    if (probando) return;
+    probando = true;
+    estado.textContent = "Conectando…";
+    var fin = setTimeout(function () { fallo(); }, 15000);
+    fetch(SERVIDOR + "/manifest.json?t=" + Date.now(), { mode: "no-cors", cache: "no-store" })
+      .then(function () { clearTimeout(fin); location.href = SERVIDOR; })
+      .catch(function () { clearTimeout(fin); fallo(); });
+  }
+
+  function fallo() {
+    probando = false;
+    quedan = SEGUNDOS;
+  }
+
+  setInterval(function () {
+    if (probando) return;
+    quedan -= 1;
+    if (quedan <= 0) probar();
+    else estado.textContent = "Reintentando en " + quedan + " s…";
+  }, 1000);
+
+  document.getElementById("reintentar").onclick = probar;
+  estado.textContent = "Reintentando en " + quedan + " s…";
+</script>
+</body></html>
