@@ -83,7 +83,7 @@ function mostrarLogin(mensaje = "") {
     btnEntrar.textContent = "Entrando…";
     try {
       // Ojo: este fetch no pasa por api() porque todavia no hay sesion.
-      const res = await fetch("/api/auth/login", {
+      const res = await fetchConLimite("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ usuario, clave }),

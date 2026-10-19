@@ -79,6 +79,26 @@ let state = {
 
 // --- Cliente de la API ---------------------------------------------------
 
+// Sin limite, una peticion cuya conexion se cae a mitad (pasar del wifi a
+// los datos en la calle, entrar a un ascensor) puede quedarse esperando
+// para siempre, y la pantalla en "Cargando…" sin decir nada. Visto en el
+// emulador el 2026-10-18 mientras su red se conectaba. 45 s dejan margen
+// a Render cuando despierta (tarda 30-50 s).
+const MS_LIMITE_PETICION = 45000;
+
+async function fetchConLimite(url, opts = {}) {
+  const ctl = typeof AbortController !== "undefined" ? new AbortController() : null;
+  const t = ctl ? setTimeout(() => ctl.abort(), MS_LIMITE_PETICION) : null;
+  try {
+    return await fetch(url, ctl ? { ...opts, signal: ctl.signal } : opts);
+  } catch (err) {
+    if (err && err.name === "AbortError") throw new Error("El servidor no responde. Revisa tu conexión.");
+    throw new Error("Sin conexión con el servidor. Revisa tu internet.");
+  } finally {
+    if (t) clearTimeout(t);
+  }
+}
+
 async function api(path, opts = {}) {
   // Con varios adultos a cargo, el servidor necesita saber de cual se
   // habla. Va antes de opts.headers para que una llamada concreta (por
@@ -88,7 +108,7 @@ async function api(path, opts = {}) {
   const headers = { ...porDefecto, ...(opts.headers || {}) };
   if (state.token) headers.Authorization = `Bearer ${state.token}`;
 
-  const res = await fetch("/api" + path, { ...opts, headers });
+  const res = await fetchConLimite("/api" + path, { ...opts, headers });
 
   // Sesion vencida o token invalido: de vuelta al login, sin dejar la
   // pantalla a medias.

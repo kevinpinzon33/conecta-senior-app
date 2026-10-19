@@ -1027,3 +1027,9 @@ div.info-zona .btn { width: 100%; margin-top: 4px; }
 .aviso-distancia { margin: 4px 0 0; font-size: 14px; font-weight: 700; color: #4A90D9; }
 .leaflet-tooltip.etiqueta-mapa.yo { border-color: #4A90D9; color: #4A90D9; }
 .leaflet-tooltip-bottom.etiqueta-mapa.yo::before { border-bottom-color: #4A90D9; }
+
+/* --- Error en la primera carga (en vez de "Cargando…" para siempre) --- */
+.error-carga { margin: 48px 20px; text-align: center; }
+.error-carga-titulo { font-family: var(--font-display); font-size: 24px; color: var(--texto); margin: 0 0 8px; }
+.error-carga-detalle { font-size: 13.5px; color: var(--texto-muted); line-height: 1.5; margin: 0 0 6px; }
+.error-carga .btn { margin-top: 16px; min-width: 200px; }

@@ -332,15 +332,42 @@ async function iniciarSesionEnLaApp() {
       .catch(() => {});
   }
 
-  await refreshAll();
-
   // Cada 10 s, el mismo ritmo al que reporta el telefono del adulto
   // mayor: con 15 s el aviso de una salida podia llegar casi medio minuto
   // tarde sobre lo que ya tarda la geocerca en confirmarla.
+  //
+  // Se programa ANTES de la primera carga: si esa falla (sin red, el
+  // servidor despertando), los refrescos siguientes la reintentan solos y
+  // la pantalla se arregla en cuanto vuelve la conexion.
   clearInterval(temporizadorRefresco);
   temporizadorRefresco = setInterval(() => {
     refreshAll().catch(() => {});
   }, 10000);
+
+  try {
+    await refreshAll();
+  } catch (err) {
+    // Si la sesion vencio, api() ya llevo al login: no pintar nada encima.
+    if (!state.usuario) return;
+    mostrarErrorDeCarga(err);
+  }
+}
+
+// En vez de dejar "Cargando…" para siempre cuando la primera carga falla.
+function mostrarErrorDeCarga(err) {
+  screenEl.innerHTML = `
+    <div class="error-carga">
+      <p class="error-carga-titulo">No se pudo cargar</p>
+      <p class="error-carga-detalle">${esc(err && err.message ? err.message : "Revisa tu conexión.")}</p>
+      <p class="error-carga-detalle">Se vuelve a intentar sola cada pocos segundos.</p>
+      <button class="btn btn-primary" id="btnReintentarCarga">Reintentar ahora</button>
+    </div>`;
+  const btn = document.getElementById("btnReintentarCarga");
+  btn.onclick = () => {
+    btn.disabled = true;
+    btn.textContent = "Cargando…";
+    refreshAll().catch((e) => mostrarErrorDeCarga(e));
+  };
 }
 
 async function cerrarSesion() {
