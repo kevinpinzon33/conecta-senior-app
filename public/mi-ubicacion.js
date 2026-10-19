@@ -16,6 +16,7 @@
 const MiUbicacion = {
   pos: null, // { lat, lng, precision, en }
   watchId: null,
+  watchNativo: null, // id del watcher nativo dentro de la app Android
   error: "", // "permiso" | "gps" | ""
   necesitaToque: false, // sin permiso concedido: hace falta un toque
 };
@@ -63,6 +64,12 @@ function alCambiarMiUbicacion() {
   // para cambiarlo por la distancia.
   if (document.getElementById("btnMiUbicacion") && typeof render === "function") render();
   if (typeof actualizarMiPuntoEnMapa === "function") actualizarMiPuntoEnMapa();
+  // La zona "Donde estoy yo" usa estas mismas posiciones: asi no depende
+  // de un segundo seguimiento del GPS (que dentro de la app puede fallar).
+  const yo = miPosicion();
+  if (yo && typeof ZonaMovil !== "undefined" && ZonaMovil.activo) {
+    alPosicionZona({ coords: { latitude: yo.lat, longitude: yo.lng, accuracy: yo.precision }, timestamp: yo.en });
+  }
   document.querySelectorAll("[data-dist-lat]").forEach((el) => {
     const lat = Number(el.dataset.distLat), lng = Number(el.dataset.distLng);
     const t = "distCorto" in el.dataset ? fmtDistancia(distanciaDesdeMi(lat, lng)) : textoDistancia(lat, lng);
@@ -75,26 +82,70 @@ function alCambiarMiUbicacion() {
  * Arranca el seguimiento de mi posicion. Desde un toque, llamarla
  * DIRECTAMENTE en el onclick: iOS solo muestra el permiso dentro del gesto.
  */
+// Guarda una posicion nueva y actualiza lo que dependa de ella.
+function registrarMiPosicion(lat, lng, precision) {
+  const primera = !miPosicion();
+  MiUbicacion.pos = { lat, lng, precision: Math.round(precision || 0), en: Date.now() };
+  MiUbicacion.error = "";
+  // Con la PRIMERA posicion hay que repintar: los textos "A X m de ti"
+  // aun no existen en la pantalla y si no, aparecian hasta 10 s despues
+  // que el punto "Tú" (visto en el emulador). Despues basta con
+  // actualizar esos textos.
+  if (primera && typeof render === "function" && state.usuario) render();
+  alCambiarMiUbicacion();
+}
+
+// ── Dentro de la app Android: ubicacion NATIVA ──
+// Visto en el emulador el 2026-10-18: dentro de la app la geolocalizacion
+// del navegador no es confiable (una vez dio "gps" sin ninguna lectura
+// aunque Android tenia el permiso) y navigator.permissions no existe. Se
+// usa el mismo plugin que ya funciona para el adulto mayor, SIN
+// backgroundMessage: solo con la app abierta y sin notificacion fija.
+function enLaAppNativa() {
+  return typeof esAppNativa !== "undefined" && esAppNativa && typeof GeoNativa !== "undefined" && !!GeoNativa;
+}
+
+async function iniciarMiUbicacionNativa() {
+  MiUbicacion.watchId = "nativo"; // marca de "en marcha" mientras arranca
+  try {
+    let permiso = await GeoNativa.checkPermissions();
+    if (permiso.location !== "granted") permiso = await GeoNativa.requestPermissions();
+    if (permiso.location !== "granted") {
+      MiUbicacion.error = "permiso";
+      MiUbicacion.watchId = null;
+      if (typeof render === "function") render();
+      return;
+    }
+    MiUbicacion.watchNativo = await GeoNativa.addWatcher(
+      { requestPermissions: false, stale: false, distanceFilter: 10 },
+      (loc, err) => {
+        if (err) {
+          if (!MiUbicacion.pos) MiUbicacion.error = "gps";
+          return;
+        }
+        registrarMiPosicion(loc.latitude, loc.longitude, loc.accuracy);
+      }
+    );
+  } catch (_) {
+    MiUbicacion.error = "gps";
+    MiUbicacion.watchId = null;
+  }
+}
+
+/**
+ * Arranca el seguimiento de mi posicion. Desde un toque, llamarla
+ * DIRECTAMENTE en el onclick: iOS solo muestra el permiso dentro del gesto.
+ */
 function iniciarMiUbicacion() {
-  if (MiUbicacion.watchId !== null || !navigator.geolocation) return;
+  if (MiUbicacion.watchId !== null) return;
   MiUbicacion.necesitaToque = false;
+  if (enLaAppNativa()) {
+    iniciarMiUbicacionNativa();
+    return;
+  }
+  if (!navigator.geolocation) return;
   MiUbicacion.watchId = navigator.geolocation.watchPosition(
-    (p) => {
-      const primera = !miPosicion();
-      MiUbicacion.pos = {
-        lat: p.coords.latitude,
-        lng: p.coords.longitude,
-        precision: Math.round(p.coords.accuracy),
-        en: Date.now(),
-      };
-      MiUbicacion.error = "";
-      // Con la PRIMERA posicion hay que repintar: los textos "A X m de ti"
-      // aun no existen en la pantalla y si no, aparecian hasta 10 s despues
-      // que el punto "Tú" (visto en el emulador). Despues basta con
-      // actualizar esos textos.
-      if (primera && typeof render === "function" && state.usuario) render();
-      alCambiarMiUbicacion();
-    },
+    (p) => registrarMiPosicion(p.coords.latitude, p.coords.longitude, p.coords.accuracy),
     (e) => {
       if (e.code === 1) {
         MiUbicacion.error = "permiso";
@@ -108,7 +159,13 @@ function iniciarMiUbicacion() {
 }
 
 function detenerMiUbicacion() {
-  if (MiUbicacion.watchId !== null) navigator.geolocation.clearWatch(MiUbicacion.watchId);
+  if (MiUbicacion.watchNativo) {
+    const id = MiUbicacion.watchNativo;
+    MiUbicacion.watchNativo = null;
+    Promise.resolve().then(() => GeoNativa.removeWatcher({ id })).catch(() => {});
+  } else if (typeof MiUbicacion.watchId === "number") {
+    navigator.geolocation.clearWatch(MiUbicacion.watchId);
+  }
   MiUbicacion.watchId = null;
 }
 
@@ -120,7 +177,13 @@ function detenerMiUbicacion() {
 async function sincronizarMiUbicacion() {
   if (!esContacto() || MiUbicacion.watchId !== null || MiUbicacion.error === "permiso") return;
   try {
-    if (navigator.permissions) {
+    if (enLaAppNativa()) {
+      const p = await GeoNativa.checkPermissions();
+      if (p.location !== "granted") {
+        MiUbicacion.necesitaToque = true;
+        return;
+      }
+    } else if (navigator.permissions) {
       const p = await navigator.permissions.query({ name: "geolocation" });
       if (p.state !== "granted") {
         MiUbicacion.necesitaToque = true;
@@ -133,7 +196,7 @@ async function sincronizarMiUbicacion() {
 
 // iOS pausa la geolocalizacion en segundo plano: al volver, reiniciar.
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible" && MiUbicacion.watchId !== null) {
+  if (document.visibilityState === "visible" && typeof MiUbicacion.watchId === "number") {
     detenerMiUbicacion();
     iniciarMiUbicacion();
   }
