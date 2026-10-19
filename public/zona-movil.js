@@ -112,6 +112,16 @@ function iniciarZonaMovil() {
   }
   ZonaMovil.activo = true;
   ZonaMovil.ultimoEnvio = 0;
+  // Si ya se conoce mi posicion (mi-ubicacion.js), arrancar con ella: la
+  // zona empieza a seguirme al instante, sin esperar una lectura nueva que
+  // con otro seguimiento activo puede tardar (Chrome junta las peticiones).
+  const conocida = typeof miPosicion === "function" ? miPosicion() : null;
+  if (conocida) {
+    alPosicionZona({
+      coords: { latitude: conocida.lat, longitude: conocida.lng, accuracy: conocida.precision },
+      timestamp: conocida.en,
+    });
+  }
   navigator.geolocation.getCurrentPosition(alPosicionZona, alFallarZona, OPCIONES_ZONA);
   if (ZonaMovil.watchId !== null) navigator.geolocation.clearWatch(ZonaMovil.watchId);
   ZonaMovil.watchId = navigator.geolocation.watchPosition(alPosicionZona, alFallarZona, OPCIONES_ZONA);

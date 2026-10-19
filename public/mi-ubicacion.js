@@ -80,6 +80,7 @@ function iniciarMiUbicacion() {
   MiUbicacion.necesitaToque = false;
   MiUbicacion.watchId = navigator.geolocation.watchPosition(
     (p) => {
+      const primera = !miPosicion();
       MiUbicacion.pos = {
         lat: p.coords.latitude,
         lng: p.coords.longitude,
@@ -87,6 +88,11 @@ function iniciarMiUbicacion() {
         en: Date.now(),
       };
       MiUbicacion.error = "";
+      // Con la PRIMERA posicion hay que repintar: los textos "A X m de ti"
+      // aun no existen en la pantalla y si no, aparecian hasta 10 s despues
+      // que el punto "Tú" (visto en el emulador). Despues basta con
+      // actualizar esos textos.
+      if (primera && typeof render === "function" && state.usuario) render();
       alCambiarMiUbicacion();
     },
     (e) => {
