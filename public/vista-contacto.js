@@ -396,6 +396,7 @@ function renderInicio() {
             }</p>
           </div>
         </div>
+        ${lineaDistancia(s)}
         ${avisoSenal(s)}
         ${infoZona(s)}
         <div class="map-meta">
@@ -451,6 +452,17 @@ function renderInicio() {
   document.getElementById("btnZona").onclick = abrirFormZona;
   // Sin permiso de ubicacion, la zona que sigue al familiar necesita un
   // toque para arrancar (iOS no deja pedirlo sin gesto).
+  // Mi ubicacion, si todavia no se dio permiso: con un toque (iOS solo
+  // muestra el permiso dentro del gesto).
+  const btnYo = document.getElementById("btnMiUbicacion");
+  if (btnYo) {
+    btnYo.onclick = () => {
+      iniciarMiUbicacion();
+      btnYo.textContent = "Buscando tu ubicación…";
+      btnYo.disabled = true;
+    };
+  }
+
   const btnSeguir = document.getElementById("btnActivarZonaMovil");
   if (btnSeguir) {
     btnSeguir.onclick = () => {
@@ -516,6 +528,41 @@ function pildoraZona(s) {
     return `<span class="pill alerta">${ICONS.warn} Alerta activa</span>`;
   }
   return `<span class="pill presente">${ICONS.check} Dentro de la zona segura</span>`;
+}
+
+// ── Distancia a mi ─────────────────────────────────────────────────
+// Con mi ubicacion (mi-ubicacion.js) cada persona dice a cuanto esta de
+// mi. Los textos llevan data-dist-lat/lng para que se actualicen solos
+// cuando me muevo, sin repintar la pantalla.
+
+// corto = solo "250 m" (para el selector, donde "A 250 m de ti" no cabe).
+function spanDistancia(a, clase, prefijo = "", corto = false) {
+  if (!a || !a.ubicacion || typeof a.ubicacion.lat !== "number") return "";
+  const t = corto
+    ? fmtDistancia(distanciaDesdeMi(a.ubicacion.lat, a.ubicacion.lng))
+    : textoDistancia(a.ubicacion.lat, a.ubicacion.lng);
+  return `<span class="${clase}" data-dist-lat="${a.ubicacion.lat}" data-dist-lng="${a.ubicacion.lng}"${corto ? " data-dist-corto" : ""}
+            ${t ? "" : "hidden"}>${esc(prefijo ? prefijo + t.charAt(0).toLowerCase() + t.slice(1) : t)}</span>`;
+}
+
+// El adulto de una alerta, con su ubicacion de AHORA (no la de la alerta).
+function adultoDeAlerta(alerta) {
+  return (
+    state.adultos.find((x) => x.id === alerta.adultoMayorId) ||
+    (state.senior && state.senior.id === alerta.adultoMayorId ? state.senior : null)
+  );
+}
+
+function lineaDistancia(s) {
+  const yo = miPosicion();
+  if (yo) return `<p class="distancia-yo">${ICONS.persona}${spanDistancia(s, "")}</p>`;
+  if (MiUbicacion.error === "permiso") {
+    return `<p class="distancia-yo apagada">${ICONS.persona}<span>Para verte en el mapa y saber a qué distancia está, permite la ubicación a esta app en los ajustes del teléfono.</span></p>`;
+  }
+  if (MiUbicacion.necesitaToque) {
+    return `<button class="btn btn-secondary btn-mi-ubicacion" id="btnMiUbicacion">${ICONS.pin} Verme en el mapa</button>`;
+  }
+  return "";
 }
 
 // ── Señal del teléfono del adulto mayor ───────────────────────────
@@ -625,7 +672,7 @@ function abrirFormZona() {
   // El punto elegido para la zona fija. Arranca en el centro actual.
   let punto = { lat: z.lat, lng: z.lng };
   let direccionTexto = z.direccion || "";
-  let miPosicion = null;
+  let posYo = null;
   let miniMapa = null;
   let pin = null;
 
@@ -859,22 +906,32 @@ function abrirFormZona() {
     // si getCurrentPosition se llama dentro del propio toque.
     btn.onclick = () => {
       elegirModo(btn.dataset.modo);
-      if (modo !== "cuidador" || miPosicion) return;
+      if (modo !== "cuidador" || posYo) return;
       if (!navigator.geolocation) {
         mostrarError("Este navegador no permite leer tu ubicación.");
         return;
       }
       const nota = $("#zonaNotaYo");
       const textoBase = nota.textContent;
+      // Si ya se conoce mi posicion (mi-ubicacion.js la sigue mientras
+      // miro el mapa), se usa esa. Pedir otra lectura mientras hay un
+      // watchPosition activo puede no responder nunca: Chrome junta las
+      // peticiones en vuelo y la nueva se pierde.
+      const conocida = typeof miPosicion === "function" ? miPosicion() : null;
+      if (conocida) {
+        posYo = { lat: conocida.lat, lng: conocida.lng, precision: conocida.precision };
+        nota.textContent = `${textoBase} Tu ubicación ahora: ±${posYo.precision} m.`;
+        return;
+      }
       nota.textContent = "Buscando tu ubicación…";
       navigator.geolocation.getCurrentPosition(
         (pos) => {
-          miPosicion = {
+          posYo = {
             lat: pos.coords.latitude,
             lng: pos.coords.longitude,
             precision: Math.round(pos.coords.accuracy),
           };
-          nota.textContent = `${textoBase} Tu ubicación ahora: ±${miPosicion.precision} m.`;
+          nota.textContent = `${textoBase} Tu ubicación ahora: ±${posYo.precision} m.`;
         },
         (err) => {
           nota.textContent = textoBase;
@@ -884,7 +941,7 @@ function abrirFormZona() {
               : "No se pudo leer tu ubicación. Revisa que el GPS del teléfono esté encendido."
           );
         },
-        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 15000 }
       );
     };
   });
@@ -899,7 +956,7 @@ function abrirFormZona() {
     radioElegido = m;
     let cuerpo;
     if (modo === "cuidador") {
-      if (!miPosicion) {
+      if (!posYo) {
         // Ya estaba siguiendo a este telefono: basta con cambiar el radio.
         if (z.modo === "cuidador" && z.cuidadorId === state.usuario.id) {
           cuerpo = { radioM: radioElegido };
@@ -907,7 +964,7 @@ function abrirFormZona() {
           return mostrarError("Espera a que el teléfono encuentre tu ubicación.");
         }
       } else {
-        cuerpo = { modo: "cuidador", lat: miPosicion.lat, lng: miPosicion.lng, radioM: radioElegido };
+        cuerpo = { modo: "cuidador", lat: posYo.lat, lng: posYo.lng, radioM: radioElegido };
       }
     } else {
       const texto = $("#zonaDir").value.trim();
@@ -1017,6 +1074,7 @@ function selectorAdultos() {
             <span class="punto-estado ${estado}"></span>
             ${esc(primerNombre(a.nombre))}
             ${a.alertasPendientes ? `<span class="cuenta-alertas">${a.alertasPendientes}</span>` : ""}
+            ${spanDistancia(a, "dist-chip", "", true)}
           </button>`;
         })
         .join("")}
@@ -1053,6 +1111,7 @@ function renderAlertas() {
           ${variosAdultos() ? `<p class="alert-quien">${esc(a.adultoNombre)}</p>` : ""}
           <p class="alert-detail">${esc(a.detalle)}</p>
           <div class="alert-place">${ICONS.pin} ${esc(a.lugar)}</div>
+          ${a.estado === "pendiente" ? spanDistancia(adultoDeAlerta(a), "alert-dist", "Ahora ") : ""}
           <span class="alert-status ${a.estado}">${esc(a.estado)}</span>
           ${a.estado === "pendiente" ? `<div class="alert-actions"><button data-id="${a.id}" data-adulto="${a.adultoMayorId}">Marcar como atendida</button></div>` : ""}
         </div>

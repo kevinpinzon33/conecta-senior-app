@@ -122,6 +122,9 @@ async function refreshAll() {
   if (esContacto() && typeof sincronizarZonaMovil === "function") {
     sincronizarZonaMovil().catch(() => {});
   }
+  if (esContacto() && typeof sincronizarMiUbicacion === "function") {
+    sincronizarMiUbicacion().catch(() => {});
+  }
 }
 
 // --- Aviso de alerta nueva (solo el cuidador) ----------------------------
@@ -184,6 +187,13 @@ function mostrarAvisoAlerta(alerta, cuantas) {
         : ""}
       <p class="aviso-titulo">${esc(alerta.titulo)}</p>
       <p class="aviso-detalle">${esc(alerta.detalle)}</p>
+      ${(() => {
+        // Que tan lejos esta de mi AHORA: lo primero que quiere saber quien
+        // recibe la alerta.
+        const a = typeof adultoDeAlerta === "function" ? adultoDeAlerta(alerta) : null;
+        const t = a && a.ubicacion ? textoDistancia(a.ubicacion.lat, a.ubicacion.lng) : "";
+        return t ? `<p class="aviso-distancia">${esc(t)}</p>` : "";
+      })()}
       <p class="aviso-hora">${esc(fmtCuando(alerta.creadoEn))}${
         cuantas > 1 ? ` · y ${cuantas - 1} más` : ""
       }</p>
@@ -340,6 +350,10 @@ async function cerrarSesion() {
   // telefono.
   if (typeof Ubicacion !== "undefined" && Ubicacion.activo) await detenerCompartir();
   if (typeof ZonaMovil !== "undefined") detenerZonaMovil();
+  if (typeof MiUbicacion !== "undefined") {
+    detenerMiUbicacion();
+    MiUbicacion.pos = null;
+  }
   try {
     await api("/auth/logout", { method: "POST" });
   } catch (_) {

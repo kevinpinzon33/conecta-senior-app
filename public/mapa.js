@@ -61,6 +61,9 @@ const Mapa = {
   ultimoCentrado: null, // para no re-centrar en cada repintado
   otros: {}, // adultoId -> marcador de los demas adultos a cargo (solo OSM)
   encuadrado: false, // si ya se encuadraron todos los adultos una vez
+  yo: null, // el punto azul del propio familiar ("Tú")
+  encuadradoConmigo: false, // si ya se encuadro una vez incluyendome
+  ultimosPuntos: [], // posiciones de los adultos en pantalla, para encuadrar
 };
 
 const COLOR = {
@@ -372,6 +375,47 @@ function actualizarOtrosOSM(s, otros) {
   return false;
 }
 
+// ── El propio familiar ("Tú") ─────────────────────────────────────
+// Azul, para no confundirlo con los adultos (verde/naranja). Su posicion
+// viene de mi-ubicacion.js y NO pasa por el servidor.
+const COLOR_YO = "#4A90D9";
+const MAX_M_PARA_ENCUADRAR = 30000;
+
+function actualizarMiPuntoEnMapa() {
+  if (!Mapa.mapa || proveedorMapa() !== "osm" || typeof miPosicion !== "function") return;
+  const yo = miPosicion();
+  if (!yo) {
+    if (Mapa.yo) { Mapa.yo.remove(); Mapa.yo = null; }
+    return;
+  }
+  if (!Mapa.yo) {
+    Mapa.yo = L.circleMarker([yo.lat, yo.lng], {
+      radius: 8, color: "#FFFFFF", weight: 3, fillColor: COLOR_YO, fillOpacity: 1,
+    })
+      // Debajo del punto: las etiquetas de los adultos van encima, y si estoy
+      // cerca de alguien no se tapan.
+      .bindTooltip("Tú", { permanent: true, direction: "bottom", className: "etiqueta-mapa yo" })
+      .addTo(Mapa.mapa);
+  } else {
+    Mapa.yo.setLatLng([yo.lat, yo.lng]);
+  }
+
+  // La primera vez que se sabe donde estoy, encuadrar para verme junto a
+  // los demas. Solo si estoy cerca: desde otra ciudad el mapa se alejaria
+  // tanto que ya no se verian las calles de nadie.
+  if (!Mapa.encuadradoConmigo && Mapa.ultimosPuntos.length) {
+    const cerca = Mapa.ultimosPuntos.some(
+      (p) => metrosEntre(yo.lat, yo.lng, p[0], p[1]) < MAX_M_PARA_ENCUADRAR
+    );
+    if (cerca) {
+      Mapa.mapa.fitBounds(Mapa.ultimosPuntos.concat([[yo.lat, yo.lng]]), {
+        padding: [40, 40], maxZoom: 16, animate: false,
+      });
+    }
+    Mapa.encuadradoConmigo = true;
+  }
+}
+
 async function montarMapaReal(hueco, s, otros = []) {
   if (!hayMapaReal() || !hueco) return false;
 
@@ -403,6 +447,9 @@ async function montarMapaReal(hueco, s, otros = []) {
     actualizarMapaGoogle(s);
     google.maps.event.trigger(Mapa.mapa, "resize");
   } else {
+    Mapa.ultimosPuntos = [s].concat(otros)
+      .filter((a) => typeof a.ubicacion.lat === "number")
+      .map((a) => [a.ubicacion.lat, a.ubicacion.lng]);
     // Si se acaba de encuadrar a todos, no re-centrar en el seleccionado.
     const encuadro = actualizarOtrosOSM(s, otros);
     if (encuadro) Mapa.ultimoCentrado = s.ubicacion.lat.toFixed(5) + "," + s.ubicacion.lng.toFixed(5);
@@ -410,6 +457,7 @@ async function montarMapaReal(hueco, s, otros = []) {
     // Tras moverlo de sitio, Leaflet necesita recalcular su tamaño o
     // dibuja el mapa recortado y con las teselas a medias.
     Mapa.mapa.invalidateSize();
+    actualizarMiPuntoEnMapa();
   }
 
   return true;
