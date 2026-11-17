@@ -292,6 +292,10 @@ function buscarUsuarioPorNombre(db, usuario) {
 function verificarClave(usuarioDb, clave) {
   // Comparacion en texto plano porque son usuarios de prueba. Con la base
   // real esto pasa a ser una verificacion de hash.
+  // Los adultos mayores NO tienen contraseña (pedido del usuario el
+  // 2026-11-17): hay un solo login, el del cuidador, y desde ahí se elige
+  // el perfil (POST /api/auth/elegir-perfil). Sin clave, no se entra.
+  if (!usuarioDb.clave) return false;
   return usuarioDb.clave === String(clave || "");
 }
 
@@ -426,7 +430,36 @@ app.post("/api/auth/login", (req, res) => {
   const token = crearSesion(db, usuarioDb);
   saveDb(db);
 
-  res.json({ token, usuario: usuarioPublico(db, usuarioDb) });
+  res.json({ token, usuario: usuarioPublico(db, usuarioDb), perfiles: perfilesDeUsuario(db, usuarioDb) });
+});
+
+// ── Elegir con que perfil entrar (2026-11-17) ──────────────────────────
+// Un cuidador entra con SU cuenta y luego elige: el mismo (ve a todos en
+// el mapa) o uno de sus adultos mayores (entra a la interfaz de esa
+// persona, por ejemplo para compartir su ubicacion desde su telefono).
+function perfilesDeUsuario(db, u) {
+  const propio = { usuarioId: u.id, nombre: u.nombre, rol: u.rol, propio: true };
+  if (!ROLES_CUIDADOR.includes(u.rol)) return [propio];
+  const adultos = adultosDeUsuario(db, u)
+    .map((id) => db.usuarios.find((x) => x.id === id && x.rol === "adulto_mayor"))
+    .filter(Boolean)
+    .map((x) => ({ usuarioId: x.id, nombre: x.nombre, rol: x.rol, propio: false }));
+  return [propio, ...adultos];
+}
+
+// Entra como uno de los perfiles de la cuenta. Solo vale para el propio
+// usuario o un adulto mayor vinculado en adultoResponsable: si no, un
+// cuidador podria entrar como cualquier persona cambiando un numero.
+app.post("/api/auth/elegir-perfil", requiereAuth, (req, res) => {
+  const db = loadDb();
+  const pedido = Number((req.body || {}).usuarioId);
+  const permitido = perfilesDeUsuario(db, req.usuario).some((p) => p.usuarioId === pedido);
+  if (!permitido) return res.status(403).json({ error: "No puedes entrar con ese perfil" });
+  const destino = db.usuarios.find((x) => x.id === pedido);
+  purgarSesionesVencidas(db);
+  const token = crearSesion(db, destino);
+  saveDb(db);
+  res.json({ token, usuario: usuarioPublico(db, destino) });
 });
 
 app.post("/api/auth/logout", requiereAuth, (req, res) => {

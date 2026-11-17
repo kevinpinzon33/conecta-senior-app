@@ -11,7 +11,6 @@
     {
       "id": 1,
       "usuario": "claudia",
-      "clave": "claudia123",
       "nombre": "Claudia Castillo",
       "correo": "claudia.castillo@ejemplo.com",
       "celular": "3101234567",
@@ -22,7 +21,7 @@
     {
       "id": 2,
       "usuario": "kevin",
-      "clave": "kevin123",
+      "clave": "123",
       "nombre": "Kevin Pinzón",
       "correo": "kevin.pinzon@ejemplo.com",
       "celular": "3203883602",
@@ -33,12 +32,62 @@
     {
       "id": 3,
       "usuario": "fernando",
-      "clave": "fernando123",
       "nombre": "Fernando Pinzón",
       "correo": "fernando.pinzon@ejemplo.com",
       "celular": "3109876543",
       "indicadorCelular": "+57",
       "rol": "adulto_mayor",
+      "estado": "activo"
+    },
+    {
+      "id": 4,
+      "usuario": "gloria",
+      "nombre": "Gloria Rincón",
+      "correo": "gloria@ejemplo.com",
+      "celular": "3100000040",
+      "indicadorCelular": "+57",
+      "rol": "adulto_mayor",
+      "estado": "activo"
+    },
+    {
+      "id": 5,
+      "usuario": "alberto",
+      "nombre": "Alberto Mejía",
+      "correo": "alberto@ejemplo.com",
+      "celular": "3100000050",
+      "indicadorCelular": "+57",
+      "rol": "adulto_mayor",
+      "estado": "activo"
+    },
+    {
+      "id": 6,
+      "usuario": "beatriz",
+      "nombre": "Beatriz Salazar",
+      "correo": "beatriz@ejemplo.com",
+      "celular": "3100000060",
+      "indicadorCelular": "+57",
+      "rol": "adulto_mayor",
+      "estado": "activo"
+    },
+    {
+      "id": 7,
+      "usuario": "hernando",
+      "nombre": "Hernando Ruiz",
+      "correo": "hernando@ejemplo.com",
+      "celular": "3100000070",
+      "indicadorCelular": "+57",
+      "rol": "adulto_mayor",
+      "estado": "activo"
+    },
+    {
+      "id": 8,
+      "usuario": "laura",
+      "clave": "123",
+      "nombre": "Laura Ruiz",
+      "correo": "laura.ruiz@ejemplo.com",
+      "celular": "3150000080",
+      "indicadorCelular": "+57",
+      "rol": "familiar",
       "estado": "activo"
     }
   ],
@@ -68,6 +117,58 @@
       "fotoUrl": null,
       "plan": "esencial",
       "codigoQr": "CS-00413"
+    },
+    {
+      "id": 4,
+      "nombreCompleto": "Gloria Rincón",
+      "fechaNacimiento": "1946-02-11",
+      "ciudad": "Bogotá",
+      "barrio": "Santa Bárbara",
+      "direccion": "Calle 116 #15-20",
+      "movilidad": "",
+      "estadoCognitivo": "",
+      "fotoUrl": null,
+      "plan": "esencial",
+      "codigoQr": "CS-00414"
+    },
+    {
+      "id": 5,
+      "nombreCompleto": "Alberto Mejía",
+      "fechaNacimiento": "1941-09-30",
+      "ciudad": "Bogotá",
+      "barrio": "Chicó",
+      "direccion": "Calle 93 #11-40",
+      "movilidad": "",
+      "estadoCognitivo": "",
+      "fotoUrl": null,
+      "plan": "esencial",
+      "codigoQr": "CS-00415"
+    },
+    {
+      "id": 6,
+      "nombreCompleto": "Beatriz Salazar",
+      "fechaNacimiento": "1950-05-04",
+      "ciudad": "Bogotá",
+      "barrio": "Usaquén",
+      "direccion": "Carrera 6 #119-30",
+      "movilidad": "",
+      "estadoCognitivo": "",
+      "fotoUrl": null,
+      "plan": "esencial",
+      "codigoQr": "CS-00416"
+    },
+    {
+      "id": 7,
+      "nombreCompleto": "Hernando Ruiz",
+      "fechaNacimiento": "1943-12-19",
+      "ciudad": "Bogotá",
+      "barrio": "Salitre",
+      "direccion": "Avenida Calle 63 #50-10",
+      "movilidad": "",
+      "estadoCognitivo": "",
+      "fotoUrl": null,
+      "plan": "esencial",
+      "codigoQr": "CS-00417"
     }
   ],
   "adultoResponsable": [
@@ -86,6 +187,38 @@
       "tipoRelacion": "familiar",
       "esPrincipal": false,
       "parentesco": "Hijo"
+    },
+    {
+      "id": 3,
+      "adultoMayorId": 4,
+      "usuarioId": 2,
+      "tipoRelacion": "familiar",
+      "esPrincipal": false,
+      "parentesco": "Sobrino"
+    },
+    {
+      "id": 4,
+      "adultoMayorId": 5,
+      "usuarioId": 2,
+      "tipoRelacion": "cuidador",
+      "esPrincipal": false,
+      "parentesco": "Cuidador"
+    },
+    {
+      "id": 5,
+      "adultoMayorId": 6,
+      "usuarioId": 2,
+      "tipoRelacion": "familiar",
+      "esPrincipal": false,
+      "parentesco": "Nieto"
+    },
+    {
+      "id": 6,
+      "adultoMayorId": 7,
+      "usuarioId": 8,
+      "tipoRelacion": "familiar",
+      "esPrincipal": true,
+      "parentesco": "Hija"
     }
   ],
   "informacionMedica": [
@@ -102,6 +235,38 @@
       "adultoMayorId": 3,
       "tipoSangre": "A+",
       "condiciones": "Artrosis de rodilla",
+      "alergias": "Ninguna conocida",
+      "notas": ""
+    },
+    {
+      "id": 14,
+      "adultoMayorId": 4,
+      "tipoSangre": "O+",
+      "condiciones": "",
+      "alergias": "Ninguna conocida",
+      "notas": ""
+    },
+    {
+      "id": 15,
+      "adultoMayorId": 5,
+      "tipoSangre": "O+",
+      "condiciones": "",
+      "alergias": "Ninguna conocida",
+      "notas": ""
+    },
+    {
+      "id": 16,
+      "adultoMayorId": 6,
+      "tipoSangre": "O+",
+      "condiciones": "",
+      "alergias": "Ninguna conocida",
+      "notas": ""
+    },
+    {
+      "id": 17,
+      "adultoMayorId": 7,
+      "tipoSangre": "O+",
+      "condiciones": "",
       "alergias": "Ninguna conocida",
       "notas": ""
     }
@@ -153,6 +318,58 @@
       "relacion": "familiar",
       "parentesco": "Hijo",
       "telefonoPrincipal": "3203883602",
+      "indicadorTelPrincipal": "+57",
+      "telefonoSecundario": null,
+      "indicadorTelSecundario": null,
+      "correo": null,
+      "prioridad": 1
+    },
+    {
+      "id": 5,
+      "adultoMayorId": 4,
+      "nombre": "Kevin Pinzón",
+      "relacion": "familiar",
+      "parentesco": "Familiar",
+      "telefonoPrincipal": "3203883602",
+      "indicadorTelPrincipal": "+57",
+      "telefonoSecundario": null,
+      "indicadorTelSecundario": null,
+      "correo": null,
+      "prioridad": 1
+    },
+    {
+      "id": 6,
+      "adultoMayorId": 5,
+      "nombre": "Kevin Pinzón",
+      "relacion": "familiar",
+      "parentesco": "Familiar",
+      "telefonoPrincipal": "3203883602",
+      "indicadorTelPrincipal": "+57",
+      "telefonoSecundario": null,
+      "indicadorTelSecundario": null,
+      "correo": null,
+      "prioridad": 1
+    },
+    {
+      "id": 7,
+      "adultoMayorId": 6,
+      "nombre": "Kevin Pinzón",
+      "relacion": "familiar",
+      "parentesco": "Familiar",
+      "telefonoPrincipal": "3203883602",
+      "indicadorTelPrincipal": "+57",
+      "telefonoSecundario": null,
+      "indicadorTelSecundario": null,
+      "correo": null,
+      "prioridad": 1
+    },
+    {
+      "id": 8,
+      "adultoMayorId": 7,
+      "nombre": "Laura Ruiz",
+      "relacion": "familiar",
+      "parentesco": "Hija",
+      "telefonoPrincipal": "3150000080",
       "indicadorTelPrincipal": "+57",
       "telefonoSecundario": null,
       "indicadorTelSecundario": null,
@@ -320,6 +537,34 @@
       "lat": 4.72905,
       "lng": -74.04612,
       "radioM": 200
+    },
+    {
+      "id": 14,
+      "adultoMayorId": 4,
+      "lat": 4.7015,
+      "lng": -74.0423,
+      "radioM": 300
+    },
+    {
+      "id": 15,
+      "adultoMayorId": 5,
+      "lat": 4.6768,
+      "lng": -74.0485,
+      "radioM": 300
+    },
+    {
+      "id": 16,
+      "adultoMayorId": 6,
+      "lat": 4.6972,
+      "lng": -74.0305,
+      "radioM": 300
+    },
+    {
+      "id": 17,
+      "adultoMayorId": 7,
+      "lat": 4.6533,
+      "lng": -74.0836,
+      "radioM": 300
     }
   ],
   "monitoreo": [
@@ -349,6 +594,74 @@
         "lat": 4.72905,
         "lng": -74.04612,
         "actualizadoEn": "2026-08-03T15:12:00.000Z"
+      },
+      "seguimiento": {
+        "estaFuera": false,
+        "lecturasFuera": 0,
+        "lecturasDentro": 0,
+        "ultimaLectura": null
+      }
+    },
+    {
+      "adultoMayorId": 4,
+      "status": "presente",
+      "revisadoEn": null,
+      "ubicacion": {
+        "direccion": "Calle 116 #15-20, Santa Bárbara, Bogotá",
+        "lat": 4.7015,
+        "lng": -74.0423,
+        "actualizadoEn": "2026-11-17T12:00:00.000Z"
+      },
+      "seguimiento": {
+        "estaFuera": false,
+        "lecturasFuera": 0,
+        "lecturasDentro": 0,
+        "ultimaLectura": null
+      }
+    },
+    {
+      "adultoMayorId": 5,
+      "status": "presente",
+      "revisadoEn": null,
+      "ubicacion": {
+        "direccion": "Calle 93 #11-40, Chicó, Bogotá",
+        "lat": 4.6768,
+        "lng": -74.0485,
+        "actualizadoEn": "2026-11-17T12:00:00.000Z"
+      },
+      "seguimiento": {
+        "estaFuera": false,
+        "lecturasFuera": 0,
+        "lecturasDentro": 0,
+        "ultimaLectura": null
+      }
+    },
+    {
+      "adultoMayorId": 6,
+      "status": "presente",
+      "revisadoEn": null,
+      "ubicacion": {
+        "direccion": "Carrera 6 #119-30, Usaquén, Bogotá",
+        "lat": 4.6972,
+        "lng": -74.0305,
+        "actualizadoEn": "2026-11-17T12:00:00.000Z"
+      },
+      "seguimiento": {
+        "estaFuera": false,
+        "lecturasFuera": 0,
+        "lecturasDentro": 0,
+        "ultimaLectura": null
+      }
+    },
+    {
+      "adultoMayorId": 7,
+      "status": "presente",
+      "revisadoEn": null,
+      "ubicacion": {
+        "direccion": "Avenida Calle 63 #50-10, Salitre, Bogotá",
+        "lat": 4.6533,
+        "lng": -74.0836,
+        "actualizadoEn": "2026-11-17T12:00:00.000Z"
       },
       "seguimiento": {
         "estaFuera": false,
