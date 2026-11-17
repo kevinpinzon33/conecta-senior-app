@@ -37,6 +37,8 @@ function mostrarLogin(mensaje = "") {
         </button>
       </form>
 
+      <p class="login-privacidad"><a href="privacidad.html" target="_blank" rel="noopener">Aviso de privacidad</a></p>
+
       <!-- PENDIENTE: quitar este bloque al conectar la base de datos real.
            Esta aqui solo para que el equipo pueda probar los dos roles. -->
       <div class="login-demo">

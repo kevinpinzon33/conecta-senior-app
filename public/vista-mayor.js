@@ -217,7 +217,54 @@ function conectarCompartirUbicacion() {
   // gesto del usuario de forma síncrona, o deniega sin preguntar.
   btn.onclick = () => {
     if (Ubicacion.activo) detenerCompartir();
-    else iniciarCompartir();
+    else if (avisoUbicacionAceptado()) iniciarCompartir();
+    else abrirAvisoUbicacion();
+  };
+}
+
+// ── Aviso antes de pedir la ubicación ─────────────────────────────
+// Google Play exige un aviso claro DENTRO de la app antes del permiso del
+// sistema: qué se comparte, con quién, que sigue con el teléfono bloqueado
+// y cómo detenerlo. Se muestra una vez; aceptarlo es el toque que arranca
+// el compartir (así iOS sigue viendo el permiso dentro del gesto).
+
+const CLAVE_AVISO_UBICACION = "conecta_senior_aviso_ubicacion_v1";
+
+function avisoUbicacionAceptado() {
+  try {
+    return localStorage.getItem(CLAVE_AVISO_UBICACION) === "1";
+  } catch (_) {
+    return false;
+  }
+}
+
+function abrirAvisoUbicacion() {
+  const familia = state.contactos.length ? "tu familia" : "tu familia o cuidador";
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = `
+    <div class="modal aviso-ubicacion" role="dialog" aria-modal="true" aria-labelledby="avisoUbiTitulo">
+      <h2 id="avisoUbiTitulo">Compartir tu ubicación</h2>
+      <p>Conecta Senior enviará la <b>ubicación de este teléfono</b> a ${familia} para que sepan dónde estás y reciban un aviso si sales de tu zona segura.</p>
+      <p>Seguirá compartiéndose <b>aunque bloquees el teléfono o cierres la app</b>. Mientras tanto verás una notificación que lo indica.</p>
+      <p>Puedes dejar de compartir cuando quieras con el botón <b>“Dejar de compartir”</b>.</p>
+      <p class="aviso-ubicacion-pie">Solo la ven las personas que tu familia vinculó a tu cuenta. <a href="privacidad.html" target="_blank" rel="noopener">Aviso de privacidad</a></p>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="avisoUbiNo">Ahora no</button>
+        <button class="btn btn-primary" id="avisoUbiSi">Compartir</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  const cerrar = () => overlay.remove();
+  overlay.querySelector("#avisoUbiNo").onclick = cerrar;
+  // Sin async: el permiso del sistema tiene que salir de este mismo toque.
+  overlay.querySelector("#avisoUbiSi").onclick = () => {
+    try {
+      localStorage.setItem(CLAVE_AVISO_UBICACION, "1");
+    } catch (_) {}
+    cerrar();
+    iniciarCompartir();
   };
 }
 

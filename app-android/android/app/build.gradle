@@ -1,5 +1,16 @@
 apply plugin: 'com.android.application'
 
+// Firma de publicacion (Google Play). La llave de SUBIDA y su contrasena
+// viven FUERA del repositorio, en GCP2/App/llaves-android/; este archivo
+// (keystore.properties, ignorado por git) solo dice donde estan. Sin el, la
+// version de publicacion se compila sin firmar y Play la rechaza.
+// Ver CONTEXTO-APP-ANDROID.md.
+def propiedadesFirma = new Properties()
+def archivoFirma = rootProject.file('keystore.properties')
+if (archivoFirma.exists()) {
+    archivoFirma.withInputStream { propiedadesFirma.load(it) }
+}
+
 android {
     namespace = "co.conectasenior.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -16,8 +27,19 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            if (archivoFirma.exists()) {
+                storeFile file(propiedadesFirma['storeFile'])
+                storePassword propiedadesFirma['storePassword']
+                keyAlias propiedadesFirma['keyAlias']
+                keyPassword propiedadesFirma['keyPassword']
+            }
+        }
+    }
     buildTypes {
         release {
+            if (archivoFirma.exists()) signingConfig signingConfigs.release
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
